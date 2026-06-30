@@ -19,6 +19,30 @@ deserialization gadget chains day-to-day. The companion CLI is
 The headline hunting outputs are **gadget-chain**, **gadget-dispatch** and
 **novel-gadget**: those say "this code, when deserialized, can reach RCE".
 
+## From a compiled JAR + an entry class
+
+When you only have a `.jar` (no source), use `tools/find-gadget-deser.py`:
+
+```bash
+python3 tools/find-gadget-deser.py --jar app.jar --start-class MainWebSpring
+python3 tools/find-gadget-deser.py --jar app.jar --start-class com.example.MainWebSpring --full
+```
+
+It decompiles the jar with CFR (auto-downloaded to `tools/.cache/cfr.jar` on first
+run), builds a buildless CodeQL database, generates a reachability query scoped to
+the start class, and reports `start-method -> ... -> dangerous sink` where
+"dangerous" = a deserialization sink (`ObjectInputStream.readObject`, XStream,
+Kryo, Jackson, Hessian, ...) **or** an RCE gadget action (`Runtime.exec`,
+`Method.invoke`, JNDI `lookup`, `ClassLoader.loadClass`, `ScriptEngine.eval`,
+`Templates.newTransformer`, ...). `--full` also runs the whole gadget/sink suite
+for a global view.
+
+Caveat: reachability is call-graph based (`calls*`, follows virtual dispatch), so
+it finds *direct/statically-callable* chains from the start class. Framework-dispatched
+entry points (Spring controllers invoked reflectively from `main` via
+`SpringApplication.run`) are not connected by the static call graph — for those,
+also run `tools/hunt.py <decompiled-src> --mode full` or the global gadget queries,
+which consider every method of every app class.
 ## Quick start
 
 ```bash

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.0.7 — 2026-07-01
+- 	ools/find-gadget-deser.py: scoped JAR gadget finder. --jar x.jar --start-class 
+  Main -> decompiles with CFR (auto-cached), builds a buildless CodeQL DB, generates
+  a reachability query scoped to the start class, and reports chains
+  start-method -> ... -> deserialization sink OR RCE gadget action.
+- java/gadgets/HuntReachabilityModel.qll: DangerousCall (deserialize sink + RCE
+  action) + reachableDangerousFrom call-graph reachability; consumed by the
+  generated query template (java/_generated/, gitignored).
+- --full also runs the global gadget/sink suite. Tested on a real test jar
+  (finds readObject + Runtime.exec chains from a Spring-style main class).
+- README + docs/hunting-guide.md document the JAR/start-class workflow. 13/13 tests.
+
 ## 0.0.6 — 2026-07-01
 - Daily-driver hunting: 	ools/hunt.py CLI builds a buildless CodeQL DB
   (--build-mode=none) and runs gadget/sink suites, emitting a ranked Markdown

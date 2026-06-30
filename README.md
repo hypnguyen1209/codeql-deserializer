@@ -40,6 +40,19 @@ payloads/exploit code, 1 gadget entry, 1 novel gadget. See
 [`examples/ysoserial-hunt-report.md`](./examples/ysoserial-hunt-report.md) and
 [`docs/hunting-guide.md`](./docs/hunting-guide.md) for the daily workflow.
 
+### From a compiled JAR + an entry class
+
+`tools/find-gadget-deser.py` decompiles a jar (CFR), builds a buildless CodeQL DB,
+and reports chains **from a chosen start class** to any dangerous sink
+(deserialization sink OR RCE gadget action) reachable via the call graph:
+
+```bash
+python3 tools/find-gadget-deser.py --jar app.jar --start-class MainWebSpring
+python3 tools/find-gadget-deser.py --jar app.jar --start-class com.example.MainWebSpring --full
+```
+Example output on a tiny test app: `MainWebSpring.main()/handleRequest() ->
+deserialization (readObject)` and `MainWebSpring.main()/handleRequest()/process()
+-> RCE:exec`. See [`examples/find-gadget-deser-report.md`](./examples/find-gadget-deser-report.md).
 ---
 
 ## Packs

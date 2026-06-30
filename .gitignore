@@ -35,3 +35,11 @@ examples/java/*.sarif
 tests/_classes/
 tests/_srcs.txt
 tests/java/build.cmd
+
+# cfr decompiler cache
+tools/.cache/
+
+
+# generated scoped hunt query
+java/_generated/
+
