@@ -1,0 +1,28 @@
+name: Publish packs
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Publish qlpacks to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install CodeQL CLI
+        run: |
+          set -e
+          curl -L -o codeql.tar.gz https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.tar.gz
+          tar -xzf codeql.tar.gz
+          echo "$PWD/codeql" >> "$GITHUB_PATH"
+      - name: Publish
+        run: |
+          set -e
+          echo "${{ secrets.GITHUB_TOKEN }}" | codeql package publish --github-auth-stdin java/qlpack.yml
+          echo "${{ secrets.GITHUB_TOKEN }}" | codeql package publish --github-auth-stdin python/qlpack.yml

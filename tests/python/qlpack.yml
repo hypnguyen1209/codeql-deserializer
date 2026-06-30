@@ -1,0 +1,8 @@
+name: hypnguyen1209/python-deserialization-tests
+version: 0.0.1
+description: "Tests for the Python deserialization query pack."
+license: MIT
+extractor: python
+dependencies:
+  hypnguyen1209/python-deserialization: "*"
+  codeql/python-all: "*"

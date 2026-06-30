@@ -1,0 +1,7 @@
+name: hypnguyen1209/java-deserialization
+version: 0.0.1
+description: "Java deserialization sink & source-to-sink chain queries for CodeQL."
+license: MIT
+dependencies:
+  codeql/java-all: "*"
+defaultSuiteFile: suites/java-deserialization.qls

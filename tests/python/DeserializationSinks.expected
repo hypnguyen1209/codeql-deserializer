@@ -1,0 +1,4 @@
+| desertest.py:13:5:13:25 | ControlFlowNode for Attribute() | Deserialization sink: this pickle decoding may execute attacker-controlled input. |
+| desertest.py:14:5:14:22 | ControlFlowNode for Attribute() | Deserialization sink: this YAML decoding may execute attacker-controlled input. |
+| desertest.py:15:5:15:26 | ControlFlowNode for Attribute() | Deserialization sink: this marshal decoding may execute attacker-controlled input. |
+| desertest.py:22:12:22:29 | ControlFlowNode for Attribute() | Deserialization sink: this pickle decoding may execute attacker-controlled input. |

@@ -1,0 +1,2 @@
+- description: Java deserialization sink & chain queries for CodeQL.
+- queries: deserialization

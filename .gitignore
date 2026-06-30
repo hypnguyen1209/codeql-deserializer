@@ -1,0 +1,29 @@
+# CodeQL build artifacts
+*.qlo
+*.qlx
+*.qll2
+*.qlo.tmp
+
+# CodeQL databases (large binaries; do not commit)
+*-database/
+databases/
+*.db
+!codeql-*.yml
+
+# Local CodeQL CLI installs / cache
+.codeql/
+.codeql-cli/
+codeql-home/
+codeql-cli-cache/
+.qlconfig
+
+# Editor / OS
+.vs/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Test / build outputs
+test-results/
+*.sarif

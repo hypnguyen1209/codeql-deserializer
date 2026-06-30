@@ -1,0 +1,12 @@
+# Auto-detect text files and normalise line endings
+* text=auto eol=lf
+
+# CodeQL sources and tests are text
+*.ql   text eol=lf
+*.qll  text eol=lf
+*.java text eol=lf
+*.py   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.md   text eol=lf
+*.expected text eol=lf

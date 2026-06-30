@@ -1,0 +1,8 @@
+name: hypnguyen1209/java-deserialization-tests
+version: 0.0.1
+description: "Tests for the Java deserialization query pack."
+license: MIT
+extractor: java
+dependencies:
+  hypnguyen1209/java-deserialization: "*"
+  codeql/java-all: "*"

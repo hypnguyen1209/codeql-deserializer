@@ -1,0 +1,53 @@
+name: Check queries
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Compile & test queries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install CodeQL CLI
+        run: |
+          set -e
+          curl -L -o codeql.tar.gz https://github.com/github/codeql-cli-binaries/releases/latest/download/codeql-linux64.tar.gz
+          tar -xzf codeql.tar.gz
+          echo "$PWD/codeql" >> "$GITHUB_PATH"
+
+      - name: Resolve & install query packs
+        run: |
+          set -e
+          codeql pack install java/qlpack.yml
+          codeql pack install python/qlpack.yml
+          codeql pack install tests/java/qlpack.yml
+          codeql pack install tests/python/qlpack.yml
+
+      - name: Compile queries
+        run: |
+          set -e
+          codeql query compile java/deserialization
+          codeql query compile python/deserialization
+
+      - name: Run query tests
+        run: |
+          set -e
+          codeql test run tests/java tests/python

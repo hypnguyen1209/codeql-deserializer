@@ -1,0 +1,7 @@
+name: hypnguyen1209/python-deserialization
+version: 0.0.1
+description: "Python deserialization sink & source-to-sink chain queries for CodeQL."
+license: MIT
+dependencies:
+  codeql/python-all: "*"
+defaultSuiteFile: suites/python-deserialization.qls

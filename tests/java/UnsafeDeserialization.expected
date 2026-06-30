@@ -1,0 +1,13 @@
+edges
+| A.java:9:31:9:51 | getInputStream(...) : InputStream | A.java:10:50:10:60 | inputStream : InputStream | provenance | Src:MaD:44458  |
+| A.java:9:31:9:51 | getInputStream(...) : InputStream | A.java:11:12:11:13 | in | provenance | Src:MaD:44458 inputStreamWrapper |
+| A.java:10:28:10:61 | new ObjectInputStream(...) : ObjectInputStream | A.java:11:12:11:13 | in | provenance |  |
+| A.java:10:50:10:60 | inputStream : InputStream | A.java:10:28:10:61 | new ObjectInputStream(...) : ObjectInputStream | provenance | MaD:44146 |
+nodes
+| A.java:9:31:9:51 | getInputStream(...) : InputStream | semmle.label | getInputStream(...) : InputStream |
+| A.java:10:28:10:61 | new ObjectInputStream(...) : ObjectInputStream | semmle.label | new ObjectInputStream(...) : ObjectInputStream |
+| A.java:10:50:10:60 | inputStream : InputStream | semmle.label | inputStream : InputStream |
+| A.java:11:12:11:13 | in | semmle.label | in |
+subpaths
+#select
+| A.java:11:12:11:13 | in | A.java:9:31:9:51 | getInputStream(...) : InputStream | A.java:11:12:11:13 | in | Untrusted data is deserialized here, which can lead to remote code execution. |

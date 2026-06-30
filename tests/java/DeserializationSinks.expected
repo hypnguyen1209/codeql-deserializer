@@ -1,0 +1,2 @@
+| A.java:11:12:11:26 | readObject(...) | Deserialization sink: readObject() deserializes data that may be attacker-controlled. |
+| A.java:18:12:18:26 | readObject(...) | Deserialization sink: readObject() deserializes data that may be attacker-controlled. |

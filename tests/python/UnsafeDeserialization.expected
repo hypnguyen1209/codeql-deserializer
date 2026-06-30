@@ -1,0 +1,24 @@
+edges
+| desertest.py:5:26:5:32 | ControlFlowNode for ImportMember | desertest.py:5:26:5:32 | ControlFlowNode for request | provenance |  |
+| desertest.py:5:26:5:32 | ControlFlowNode for request | desertest.py:12:15:12:21 | ControlFlowNode for request | provenance |  |
+| desertest.py:12:5:12:11 | ControlFlowNode for payload | desertest.py:13:18:13:24 | ControlFlowNode for payload | provenance |  |
+| desertest.py:12:5:12:11 | ControlFlowNode for payload | desertest.py:14:15:14:21 | ControlFlowNode for payload | provenance |  |
+| desertest.py:12:5:12:11 | ControlFlowNode for payload | desertest.py:15:19:15:25 | ControlFlowNode for payload | provenance |  |
+| desertest.py:12:15:12:21 | ControlFlowNode for request | desertest.py:12:15:12:26 | ControlFlowNode for Attribute | provenance | AdditionalTaintStep |
+| desertest.py:12:15:12:26 | ControlFlowNode for Attribute | desertest.py:12:15:12:41 | ControlFlowNode for Attribute() | provenance | dict.get |
+| desertest.py:12:15:12:41 | ControlFlowNode for Attribute() | desertest.py:12:5:12:11 | ControlFlowNode for payload | provenance |  |
+nodes
+| desertest.py:5:26:5:32 | ControlFlowNode for ImportMember | semmle.label | ControlFlowNode for ImportMember |
+| desertest.py:5:26:5:32 | ControlFlowNode for request | semmle.label | ControlFlowNode for request |
+| desertest.py:12:5:12:11 | ControlFlowNode for payload | semmle.label | ControlFlowNode for payload |
+| desertest.py:12:15:12:21 | ControlFlowNode for request | semmle.label | ControlFlowNode for request |
+| desertest.py:12:15:12:26 | ControlFlowNode for Attribute | semmle.label | ControlFlowNode for Attribute |
+| desertest.py:12:15:12:41 | ControlFlowNode for Attribute() | semmle.label | ControlFlowNode for Attribute() |
+| desertest.py:13:18:13:24 | ControlFlowNode for payload | semmle.label | ControlFlowNode for payload |
+| desertest.py:14:15:14:21 | ControlFlowNode for payload | semmle.label | ControlFlowNode for payload |
+| desertest.py:15:19:15:25 | ControlFlowNode for payload | semmle.label | ControlFlowNode for payload |
+subpaths
+#select
+| desertest.py:13:18:13:24 | ControlFlowNode for payload | desertest.py:5:26:5:32 | ControlFlowNode for ImportMember | desertest.py:13:18:13:24 | ControlFlowNode for payload | Untrusted data is deserialized here, which can lead to arbitrary code execution. |
+| desertest.py:14:15:14:21 | ControlFlowNode for payload | desertest.py:5:26:5:32 | ControlFlowNode for ImportMember | desertest.py:14:15:14:21 | ControlFlowNode for payload | Untrusted data is deserialized here, which can lead to arbitrary code execution. |
+| desertest.py:15:19:15:25 | ControlFlowNode for payload | desertest.py:5:26:5:32 | ControlFlowNode for ImportMember | desertest.py:15:19:15:25 | ControlFlowNode for payload | Untrusted data is deserialized here, which can lead to arbitrary code execution. |
