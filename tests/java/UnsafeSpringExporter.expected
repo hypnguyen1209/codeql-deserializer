@@ -1,0 +1,1 @@
+| springexporter/AppConfig.java:11:23:11:32 | myExporter | Unsafe deserialization in a Spring exporter bean 'myExporter'. |

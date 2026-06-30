@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.0.3 — 2026-06-30
+- Java: added UnsafeSpringExporter.ql + SpringExporterModel.qll — Spring remoting
+  exporter (@Bean returning a RemoteInvocationSerializingExporter/HessianExporter),
+  a configuration-level deserialization sink. Adapted from GitHubSecurityLab/
+  CodeQL-Community-Packs (UnsafeSpringExporterLib.qll).
+- Tests: added Spring exporter fixture (vulnerable @Bean flagged, safe plain bean not);
+  7/7 tests pass.
+- Docs: credited GitHubSecurityLab/CodeQL-Community-Packs and github/codeql in
+  docs/references.md.
+
 ## 0.0.2 — 2026-06-30
 - Java: added `UnsafeDeserializationRmi.ql` — RMI deserialization via binding a
   remote object with a complex-typed method (adapted from GitHub's experimental

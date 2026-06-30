@@ -34,6 +34,8 @@ frameworks. See [Acknowledgements & references](#acknowledgements--references).
 │   ├── UnsafeDeserialization.ql          # remote source -> deserialization sink (path) [official model]
 │   ├── UnsafeDeserializationType.ql      # remote -> polymorphic type descriptor (path) [official model]
 │   ├── UnsafeDeserializationRmi.ql       # RMI: bind a remote object with a complex-typed method (path)
+│   ├── UnsafeSpringExporter.ql           # Spring remoting @Bean exporter that deserializes (problem)
+│   ├── SpringExporterModel.qll           # Spring exporter sink model
 │   ├── DubboDeserialization.ql            # Apache Dubbo Codec2.decodeBody -> ObjectInput.readXXX (path)
 │   ├── DeserializationSinkModel.qll       # generic sink model (re-exports codeql/java-all)
 │   └── DubboDeserializationModel.qll       # Dubbo-specific source/sink + taint steps
@@ -55,7 +57,8 @@ frameworks. See [Acknowledgements & references](#acknowledgements--references).
 | Deserialization sink | `java/deserialization/sink` | problem | Every deserialization sink call (gadget triage) |
 | Unsafe deserialization chain | `java/deserialization/unsafe-chain` | path | Remote/user source → deserialization sink (RCE chain) |
 | Unsafe polymorphic deserialization type | `java/deserialization/unsafe-type` | path | Remote source → polymorphic type descriptor (Jackson/Jodd/Gson) |
-| Unsafe RMI deserialization | `java/deserialization/rmi` | path | A remote object with a complex-typed method is exported & bound |
+| Unsafe RMI deserialization | java/deserialization/rmi | path | A remote object with a complex-typed method is exported & bound |
+| Unsafe Spring remote exporter deserialization | java/deserialization/spring-exporter | problem | A Spring remoting @Bean (HTTP Invoker/RMI/Hessian exporter) that deserializes request bodies |
 | Apache Dubbo deserialization chain | `java/deserialization/dubbo-chain` | path | Dubbo `Codec2.decodeBody(...)` → `ObjectInput.readXXX(...)` (CVE-2020-11995 style) |
 
 Generic sinks (queries 1–3): `ObjectInputStream.readObject/readUnshared`,
@@ -111,7 +114,7 @@ Each query ships a vulnerable and a safe fixture under `tests/`. The pack
 currently has 6 passing tests (4 Java, 2 Python):
 
 ```bash
-codeql test run tests/java tests/python   # All 6 tests passed
+codeql test run tests/java tests/python   # All 7 tests passed
 ```
 
 Use `codeql test run --learn <dir>` to (re)generate `.expected` files, then
@@ -139,7 +142,8 @@ informed this work. In particular:
 
 - **Generic Java/Python models** reuse GitHub's official
   `codeql/java-all` and `codeql/python-all` (Apache-2.0).
-- **Apache Dubbo chain** is adapted from the GreHack 2021 workshop by
+- **Spring remote exporter** query is adapted from GitHubSecurityLab/CodeQL-Community-Packs (UnsafeSpringExporterLib).
+The **Apache Dubbo chain** is adapted from the GreHack 2021 workshop by
   Alvaro Munoz (@pwntester) — `pwntester/codeql_grehack_workshop` (MIT).
 - **RMI query** is adapted from GitHub's experimental
   `java/unsafe-deserialization-rmi` (Apache-2.0), surfaced via
