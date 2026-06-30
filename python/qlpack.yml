@@ -1,5 +1,5 @@
 name: hypnguyen1209/python-deserialization
-version: 0.0.3
+version: 0.0.4
 description: "Python deserialization sink & source-to-sink chain queries for CodeQL."
 license: MIT
 dependencies:

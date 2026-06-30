@@ -27,3 +27,7 @@ Thumbs.db
 # Test / build outputs
 test-results/
 *.sarif
+# examples build outputs
+examples/java/classes/
+examples/java/sources.txt
+examples/java/*.sarif

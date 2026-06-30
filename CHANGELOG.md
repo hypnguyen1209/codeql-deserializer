@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.0.4 — 2026-06-30
+- Deep-debug validation: ran all packs against real CodeQL databases built from
+  a comprehensive xamples/ target (8 Java sinks across 8 frameworks + 6
+  recognized-safe variants; 10 Python sinks + safe YAML/CSafeLoader).
+- Confirmed parity with official java/unsafe-deserialization (same 8 results).
+- Confirmed no false positives from Dubbo/RMI/Spring queries on generic code.
+- Added xamples/ (runnable demo + run-debug scripts) and docs/deep-debug.md.
+
 ## 0.0.3 — 2026-06-30
 - Java: added UnsafeSpringExporter.ql + SpringExporterModel.qll — Spring remoting
   exporter (@Bean returning a RemoteInvocationSerializingExporter/HessianExporter),
