@@ -1,0 +1,14 @@
+edges
+| rmitest/Server.java:11:25:11:43 | new MyServiceImpl(...) : MyServiceImpl | rmitest/Server.java:12:71:12:73 | obj : MyServiceImpl | provenance |  |
+| rmitest/Server.java:12:26:12:77 | (...)... : MyService | rmitest/Server.java:14:36:14:39 | stub | provenance |  |
+| rmitest/Server.java:12:38:12:77 | exportObject(...) : Remote | rmitest/Server.java:12:26:12:77 | (...)... : MyService | provenance |  |
+| rmitest/Server.java:12:71:12:73 | obj : MyServiceImpl | rmitest/Server.java:12:38:12:77 | exportObject(...) : Remote | provenance | Config |
+nodes
+| rmitest/Server.java:11:25:11:43 | new MyServiceImpl(...) : MyServiceImpl | semmle.label | new MyServiceImpl(...) : MyServiceImpl |
+| rmitest/Server.java:12:26:12:77 | (...)... : MyService | semmle.label | (...)... : MyService |
+| rmitest/Server.java:12:38:12:77 | exportObject(...) : Remote | semmle.label | exportObject(...) : Remote |
+| rmitest/Server.java:12:71:12:73 | obj : MyServiceImpl | semmle.label | obj : MyServiceImpl |
+| rmitest/Server.java:14:36:14:39 | stub | semmle.label | stub |
+subpaths
+#select
+| rmitest/Server.java:14:36:14:39 | stub | rmitest/Server.java:11:25:11:43 | new MyServiceImpl(...) : MyServiceImpl | rmitest/Server.java:14:36:14:39 | stub | Unsafe deserialization in a remote object. |

@@ -1,8 +1,22 @@
 # Changelog
 
+## 0.0.2 — 2026-06-30
+- Java: added `UnsafeDeserializationRmi.ql` — RMI deserialization via binding a
+  remote object with a complex-typed method (adapted from GitHub's experimental
+  `java/unsafe-deserialization-rmi`).
+- Java: added `DubboDeserialization.ql` + `DubboDeserializationModel.qll` — Apache
+  Dubbo `Codec2.decodeBody` → `ObjectInput.readXXX` chain (CVE-2020-11995 style),
+  adapted from the GreHack 2021 workshop (@pwntester).
+- Tests: added RMI and Dubbo fixtures (vulnerable flagged, safe not flagged);
+  6/6 tests pass.
+- Docs: added `docs/references.md` crediting the integrated & referenced repos.
+- README: expanded query/coverage tables.
+
 ## 0.0.1 — 2026-06-30
 - Initial public release.
-- Java query pack (`codeql-db/java`): `DeserializationSinks`, `UnsafeDeserialization` (chain), `UnsafeDeserializationType` (polymorphic type control). Reuses the `codeql/java-all` CWE-502 sink model.
-- Python query pack (`codeql-db/python`): `DeserializationSinks`, `UnsafeDeserialization` (chain). Reuses the `codeql/python-all` `Decoding` model.
-- Test fixtures for both languages (vulnerable + safe) with committed `.expected` files.
+- Java query pack: `DeserializationSinks`, `UnsafeDeserialization` (chain),
+  `UnsafeDeserializationType` (polymorphic type control). Reuses `codeql/java-all`.
+- Python query pack: `DeserializationSinks`, `UnsafeDeserialization` (chain).
+  Reuses `codeql/python-all`.
+- Test fixtures for both languages (vulnerable + safe) with committed `.expected`.
 - GitHub Actions: `check-queries` (compile + test) and `publish` (to GHCR).

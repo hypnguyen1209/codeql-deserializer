@@ -1,0 +1,12 @@
+edges
+| org/apache/dubbo/remoting/DubboCodecImpl.java:11:46:11:59 | is : InputStream | org/apache/dubbo/remoting/DubboCodecImpl.java:12:49:12:50 | is : InputStream | provenance |  |
+| org/apache/dubbo/remoting/DubboCodecImpl.java:12:29:12:51 | new ObjectInputImpl(...) : ObjectInputImpl | org/apache/dubbo/remoting/DubboCodecImpl.java:13:16:13:20 | input | provenance |  |
+| org/apache/dubbo/remoting/DubboCodecImpl.java:12:49:12:50 | is : InputStream | org/apache/dubbo/remoting/DubboCodecImpl.java:12:29:12:51 | new ObjectInputImpl(...) : ObjectInputImpl | provenance | Config |
+nodes
+| org/apache/dubbo/remoting/DubboCodecImpl.java:11:46:11:59 | is : InputStream | semmle.label | is : InputStream |
+| org/apache/dubbo/remoting/DubboCodecImpl.java:12:29:12:51 | new ObjectInputImpl(...) : ObjectInputImpl | semmle.label | new ObjectInputImpl(...) : ObjectInputImpl |
+| org/apache/dubbo/remoting/DubboCodecImpl.java:12:49:12:50 | is : InputStream | semmle.label | is : InputStream |
+| org/apache/dubbo/remoting/DubboCodecImpl.java:13:16:13:20 | input | semmle.label | input |
+subpaths
+#select
+| org/apache/dubbo/remoting/DubboCodecImpl.java:13:16:13:20 | input | org/apache/dubbo/remoting/DubboCodecImpl.java:11:46:11:59 | is : InputStream | org/apache/dubbo/remoting/DubboCodecImpl.java:13:16:13:20 | input | Untrusted data from a Dubbo codec is deserialized here, which can lead to remote code execution. |
