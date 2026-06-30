@@ -1,0 +1,2 @@
+| gadgettest/EvilComparator.java:12:16:12:22 | compare | Gadget dispatch: EvilComparator.compare() reaches exec() [critical] \u2014 a deserialization gadget dispatch. |
+| gadgettest/EvilHandler.java:13:19:13:24 | invoke | Gadget dispatch: EvilHandler.invoke() reaches invoke() [high] \u2014 a deserialization gadget dispatch. |

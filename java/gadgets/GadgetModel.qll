@@ -9,12 +9,12 @@
  * `Method.invoke`, `Class.forName`+`newInstance`, `ClassLoader.loadClass`,
  * `ScriptEngine.eval`, JNDI `lookup`, `Templates.newTransformer`, ...).
  *
- * This file defines those concepts so the queries below can find gadget
- * candidates in a target codebase: entry points, action sinks, gadget links,
- * and the call-graph reachability that ties entry to action.
+ * This file defines those concepts plus the call-graph reachability that ties
+ * entry/link to action, and the ysoserial known-gadget catalog. The gadget
+ * hunting queries consume them.
  *
- * All predicates are restricted to target *source* code (`.fromSource()`) so
- * JDK/library internals (e.g. `java.time` readExternal) are not reported.
+ * All entry/link/catalog predicates are restricted to target *source* code
+ * (`.fromSource()`) so JDK/library internals are not reported.
  */
 
 import java
@@ -27,7 +27,6 @@ predicate isSerializableType(RefType t) {
 /**
  * A call to an RCE/sensitive primitive that a deserialization gadget may
  * eventually trigger. This is the "action" end of a ysoserial chain.
- * Restricted to call sites in target source.
  */
 class GadgetActionCall extends MethodCall {
   GadgetActionCall() {
@@ -81,6 +80,17 @@ class GadgetActionCall extends MethodCall {
 
   /** Name of the action primitive, e.g. "exec", "invoke", "lookup". */
   string getActionName() { result = this.getMethod().getName() }
+
+  /** Severity band for the action primitive, used to rank hunting results. */
+  string getActionSeverity() {
+    if this.getActionName() = ["exec", "start", "lookup", "eval", "loadClass"]
+    then result = "critical"
+    else (
+      if this.getActionName() = ["invoke", "newInstance", "forName", "newTransformer", "openConnection"]
+      then result = "high"
+      else result = "medium"
+    )
+  }
 }
 
 /** Holds if `method` is a deserialization callback (entry point) in source. */
@@ -108,8 +118,7 @@ private predicate isDeserializationCallback(Method method) {
 /**
  * A deserialization gadget *entry point*: a `Serializable`/`Externalizable`
  * type's `readObject`/`readResolve`/`readExternal`/`readObjectNoData` callback.
- * These are invoked by `ObjectInputStream.readObject()` on attacker-controlled
- * data, so any non-trivial work they do is a candidate gadget.
+ * Invoked by `ObjectInputStream.readObject()` on attacker-controlled data.
  */
 class GadgetEntryPoint extends Method {
   GadgetEntryPoint() { isDeserializationCallback(this) }
@@ -119,34 +128,105 @@ class GadgetEntryPoint extends Method {
  * A *gadget link* method: an intermediate method ysoserial chains through —
  * `InvocationHandler.invoke`, `Comparator.compare`/`Comparable.compareTo`,
  * `Map.get/put/entrySet/containsKey`, and `Object.equals/hashCode/toString`
- * on serializable types. Restricted to source.
+ * on serializable types. The deserialization machinery can trigger these
+ * (proxy `equals`/`hashCode`, `HashMap`/`TreeMap` insertion, etc.).
  */
 class GadgetLinkMethod extends Method {
   GadgetLinkMethod() {
     this.fromSource() and
     (
       this.hasName("invoke") and
-      this.getDeclaringType().getASupertype*().hasQualifiedName("java.lang.reflect", "InvocationHandler")
+      this.getDeclaringType().getASupertype*().getSourceDeclaration().hasQualifiedName("java.lang.reflect", "InvocationHandler")
       or
       this.hasName(["compare", "compareTo"]) and
       (
-        this.getDeclaringType().getASupertype*().hasQualifiedName("java.util", "Comparator")
+        this.getDeclaringType().getASupertype*().getSourceDeclaration().hasQualifiedName("java.util", "Comparator")
         or
-        this.getDeclaringType().getASupertype*().hasQualifiedName("java.lang", "Comparable")
+        this.getDeclaringType().getASupertype*().getSourceDeclaration().hasQualifiedName("java.lang", "Comparable")
       )
       or
       this.hasName(["get", "put", "entrySet", "containsKey"]) and
-      this.getDeclaringType().getASupertype*().hasQualifiedName("java.util", "Map")
+      this.getDeclaringType().getASupertype*().getSourceDeclaration().hasQualifiedName("java.util", "Map")
       or
       this.hasName(["equals", "hashCode", "toString"]) and isSerializableType(this.getDeclaringType())
     )
   }
 }
 
-/**
- * Holds if gadget entry `entry` can (transitively) reach action call `action`
- * through the call graph. This is the ysoserial entry-to-action reachability.
- */
+/** Holds if gadget entry `entry` (transitively) reaches action call `action`. */
 predicate gadgetReachableAction(GadgetEntryPoint entry, GadgetActionCall action) {
   entry.calls*(action.getCaller())
+}
+
+/** Holds if gadget dispatch `link` (transitively) reaches action call `action`.
+ *  These are the "dispatch" gadgets (e.g. `InvokerTransformer.transform`). */
+predicate gadgetLinkReachesAction(GadgetLinkMethod link, GadgetActionCall action) {
+  link.calls*(action.getCaller())
+}
+
+/**
+ * Holds if `t` is one of the well-known ysoserial gadget source classes
+ * (https://github.com/frohoff/ysoserial). Shared by the known-class query and
+ * the novel-gadget query (which excludes these).
+ */
+predicate isKnownYsoserialGadgetClass(RefType t) {
+  t.fromSource() and
+  (
+    t.hasQualifiedName("org.apache.commons.collections.functors", [
+      "InvokerTransformer", "ChainedTransformer", "ConstantTransformer",
+      "InstantiateTransformer", "TransformedMap"
+    ])
+    or
+    t.hasQualifiedName("org.apache.commons.collections.keyvalue", "TiedMapEntry")
+    or
+    t.hasQualifiedName("org.apache.commons.collections.map", ["LazyMap", "DefaultedMap"])
+    or
+    t.hasQualifiedName("org.apache.commons.collections4.functors", [
+      "InvokerTransformer", "ChainedTransformer", "ConstantTransformer", "InstantiateTransformer"
+    ])
+    or
+    t.hasQualifiedName("org.apache.commons.collections4.keyvalue", "TiedMapEntry")
+    or
+    t.hasQualifiedName("org.apache.commons.collections4.map", ["LazyMap", "DefaultedMap"])
+    or
+    t.hasQualifiedName("org.apache.commons.beanutils", ["BeanComparator", "PropertyUtilsBean"])
+    or
+    t.hasQualifiedName("com.sun.org.apache.xalan.internal.xsltc.trax", "TemplatesImpl")
+    or
+    t.hasQualifiedName("com.sun.org.apache.xalan.internal.xsltc.runtime", "AbstractTranslet")
+    or
+    t.hasQualifiedName("com.sun.org.apache.bcel.internal.util", "ClassLoader")
+    or
+    t.hasQualifiedName("javassist.util.proxy", ["ProxyFactory", "ProxyObject", "RuntimeSupport"])
+    or
+    t.hasQualifiedName("org.codehaus.groovy.runtime", [
+      "ConvertedClosure", "MethodClosure", "ConversionHandler"
+    ])
+    or
+    t.hasQualifiedName("org.springframework.beans.factory.config", "PropertyPathFactoryBean")
+    or
+    t.hasQualifiedName("org.springframework.transaction.jta", "JtaTransactionManager")
+    or
+    t.hasQualifiedName("org.springframework.aop.support", "AbstractBeanFactoryPointcutAdvisor")
+    or
+    t.hasQualifiedName("org.springframework.jndi", "JndiObjectFactoryBean")
+    or
+    t.hasQualifiedName("com.mchange.v2.c3p0", "WrapperConnectionPoolDataSource")
+    or
+    t.hasQualifiedName("org.hibernate.property", "BasicPropertyAccessor")
+    or
+    t.hasQualifiedName("org.apache.commons.fileupload.disk", "DiskFileItem")
+    or
+    t.hasQualifiedName("org.mozilla.javascript", ["NativeJavaObject", "FunctionObject", "MemberBox"])
+    or
+    t.hasQualifiedName("com.alibaba.fastjson", ["JSONArray", "JSONObject"])
+    or
+    t.hasQualifiedName("org.apache.myfaces.view.facelets.el", "ValueExpressionMethodExpression")
+    or
+    t.hasQualifiedName("org.apache.naming.resources", "ResourceRef")
+    or
+    t.hasQualifiedName("org.apache.commons.configuration", "ConfigurationMap")
+    or
+    t.hasQualifiedName("org.apache.wicket.util.link", "Link")
+  )
 }

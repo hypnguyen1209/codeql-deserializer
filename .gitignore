@@ -31,3 +31,7 @@ test-results/
 examples/java/classes/
 examples/java/sources.txt
 examples/java/*.sarif
+# tests build artifacts (debug build.cmd)
+tests/_classes/
+tests/_srcs.txt
+tests/java/build.cmd

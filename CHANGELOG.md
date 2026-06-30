@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.0.6 — 2026-07-01
+- Daily-driver hunting: 	ools/hunt.py CLI builds a buildless CodeQL DB
+  (--build-mode=none) and runs gadget/sink suites, emitting a ranked Markdown
+  report.
+- New hunting queries: GadgetDispatchChain.ql (Serializable link method ->
+  RCE action; e.g. Comparator/InvocationHandler/Map dispatch gadgets) and
+  NovelGadgetCandidates.ql (entry/dispatch -> action, excluding the known
+  ysoserial catalog -> candidate NEW gadgets).
+- Model: deterministic action-severity ranking; getSourceDeclaration() for
+  parameterized interfaces (Comparator/Map) so generic dispatch gadgets are
+  recognized in buildless mode.
+- docs/hunting-guide.md daily workflow; xamples/ysoserial-hunt-report.md`n  real run on frohoff/ysoserial (48 findings: 1 chain, 45 actions, 1 entry,
+  1 novel).
+- Suites: java-gadgets.qls, java-deserialization.qls, java-all.qls. 13/13 tests.
+
 ## 0.0.5 — 2026-07-01
 - Java: added ysoserial-style deserialization gadget detection under java/gadgets/:
   GadgetEntryPoints.ql (Serializable readObject/readResolve/readExternal),
