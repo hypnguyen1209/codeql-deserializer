@@ -107,14 +107,37 @@ remote flow) and `pickle.loads(b"\x80\x04\x95")` (L79, constant input).
 
 ## Java gadgets — `tests/java/gadgettest/` (ysoserial-style)
 
+Six gadget queries on a fixture with `EvilGadget` (readObject->exec),
+`EvilHandler` (InvocationHandler.invoke->Method.invoke),
+`EvilComparator` (Comparator.compare->exec), `SafeGadget` (readObject, no
+action) and an `InvokerTransformer` stub:
+
 | Query | Results | Notes |
 |---|---|---|
-| `java/deserialization/gadget-entry` | 2 | `EvilGadget.readObject`, `SafeGadget.readObject` (both are entry points; JDK internals excluded via `fromSource()`) |
-| `java/deserialization/gadget-action` | 2 | `EvilGadget` `Runtime.exec`, `EvilHandler` `Method.invoke` |
+| `java/deserialization/gadget-entry` | 2 | `EvilGadget.readObject`, `SafeGadget.readObject` (JDK internals excluded via `fromSource()`) |
+| `java/deserialization/gadget-action` | 3 | `EvilGadget`/`EvilComparator` `Runtime.exec`, `EvilHandler` `Method.invoke` |
 | `java/deserialization/gadget-chain` | 1 | `EvilGadget.readObject` -> `exec` (safe `SafeGadget` correctly not chained) |
+| `java/deserialization/gadget-dispatch` | 2 | `EvilComparator.compare` -> `exec` [critical], `EvilHandler.invoke` -> `invoke` [high] |
+| `java/deserialization/novel-gadget` | 3 | the three chains above, none in the known ysoserial catalog |
 | `java/deserialization/known-gadget-class` | 1 | `org.apache.commons.collections.functors.InvokerTransformer` stub |
 
+Bug found & fixed during deep debugging: a `Comparator<Object>` implementer was
+*not* flagged because `getASupertype*()` returns `Comparator<Object>` and
+`hasQualifiedName("java.util","Comparator")` does not match the parameterized
+name. Fixed by matching via `getSourceDeclaration()`, which also handles
+generic `Map`/`Comparable` dispatch gadgets. Action severity was also made
+deterministic (`if/then/else`) — it previously emitted duplicate rows.
+
 Cross-check: running the combined `java-all.qls` suite against the generic
-`examples/java` DeserTarget database yields **0** results for all four gadget
+`examples/java` DeserTarget database yields **0** results for all six gadget
 queries (no false positives on code that only calls deserialization sinks but
 defines no gadgets).
+
+### Real target — `frohoff/ysoserial` (buildless `--build-mode=none`)
+
+Running `tools/hunt.py frohoff/ysoserial --mode gadgets` produces 48 findings:
+- `gadget-chain` (1): `ExecMockSerializable.readObject()` -> `Runtime.exec()` in `test/payloads/TestHarnessTest.java`.
+- `gadget-action` (45): the RCE primitives ysoserial actually uses (`Class.forName`, `Method.invoke`, `ClassLoader.loadClass`, `URL.openConnection`, `Runtime.exec`) across `payloads/util/Gadgets.java`, `util/Reflections.java`, `exploit/JBoss.java`, `exploit/JenkinsCLI.java`, `payloads/Hibernate1.java`, `payloads/MozillaRhino1.java`, ...
+- `gadget-entry` (1) and `novel-gadget` (1): the `ExecMockSerializable` chain (not in the known catalog).
+
+Full report: [`examples/ysoserial-hunt-report.md`](../examples/ysoserial-hunt-report.md).

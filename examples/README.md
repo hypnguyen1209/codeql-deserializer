@@ -13,7 +13,14 @@ variant, so you can confirm that:
 - our `UnsafeDeserialization.ql` produces the same results as GitHub's official
   `java/unsafe-deserialization` (parity).
 
-See [`docs/deep-debug.md`](../docs/deep-debug.md) for the recorded results.
+See [docs/deep-debug.md](../docs/deep-debug.md) for the recorded results.
+
+There is also a real-world run captured in
+[`ysoserial-hunt-report.md`](./ysoserial-hunt-report.md): `tools/hunt.py`
+pointed at `frohoff/ysoserial` (`--mode gadgets`, buildless) finds the
+`readObject -> exec` gadget chain and the RCE actions ysoserial uses. For your
+own targets use `tools/hunt.py <src> --mode full` (see
+[`docs/hunting-guide.md`](../docs/hunting-guide.md)).
 
 ## Run
 

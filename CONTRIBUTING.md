@@ -9,7 +9,9 @@ Pull requests welcome. Please:
    review the diff by hand.
 3. Keep query metadata (`@id`, `@kind`, `@security-severity`, `@tag`) consistent
    with the existing queries.
-4. Document new sinks in `README.md` (coverage table) and `docs/extending.md`.
+4. Document new sinks in README.md (coverage table) and docs/extending.md.
+5. For a new known gadget class, add it to isKnownYsoserialGadgetClass in java/gadgets/GadgetModel.qll and re-test.
+6. Try your change with python tools/hunt.py tests/java --mode full on a real target.
 
 ## Local setup
 
