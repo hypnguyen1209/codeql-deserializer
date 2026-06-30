@@ -15,6 +15,7 @@ to compile against `codeql/java-all@9.1.2` and `codeql/python-all@7.1.2`).
 | [webraybtl/CodeQLpy](https://github.com/webraybtl/CodeQLpy) | (see repo) | UnsafeDeserializationRmi.ql — pointed us to the RMI "binding unsafe remote object" deserialization surface; the modern, canonical version was taken from GitHub's experimental java/unsafe-deserialization-rmi. |
 | [GitHubSecurityLab/CodeQL-Community-Packs](https://github.com/GitHubSecurityLab/CodeQL-Community-Packs) | MIT | UnsafeSpringExporter.ql + SpringExporterModel.qll — Spring remoting exporter deserialization sink (adapted from UnsafeSpringExporterLib.qll). Also referenced for the audit/local/partial-path debugging query patterns. |
 | [trailofbits/codeql-queries](https://github.com/trailofbits/codeql-queries) | Apache-2.0 | qlpack/suite conventions, query metadata style (`@group`, `@tags`, `@security-severity`) and the `DataFlow::GlobalWithState`/`StateConfigSig` pattern referenced in `docs/extending.md`. |
+| [frohoff/ysoserial](https://github.com/frohoff/ysoserial) | MIT | `java/gadgets/*` — the ysoserial payload catalog informed the gadget model: entry points (`readObject`/`readResolve`/`readExternal`), gadget links (`InvocationHandler.invoke`, `Comparator.compare`, `Map.get/put`, `equals/hashCode/toString`), RCE actions (`Runtime.exec`, `Method.invoke`, JNDI `lookup`, `Templates.newTransformer`, ...), and the known-gadget-class list. |
 
 ## What was referenced (studied for patterns / inspiration, no code copied)
 

@@ -1,0 +1,2 @@
+| gadgettest/EvilGadget.java:12:18:12:27 | readObject | Deserialization gadget entry point: readObject() on serializable EvilGadget is invoked on attacker-controlled data. |
+| gadgettest/SafeGadget.java:12:18:12:27 | readObject | Deserialization gadget entry point: readObject() on serializable SafeGadget is invoked on attacker-controlled data. |

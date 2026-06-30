@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.5 — 2026-07-01
+- Java: added ysoserial-style deserialization gadget detection under java/gadgets/:
+  GadgetEntryPoints.ql (Serializable readObject/readResolve/readExternal),
+  GadgetActionCalls.ql (RCE primitives: Runtime.exec, Method.invoke, JNDI
+  lookup, Templates.newTransformer, ...), DeserializationGadgetChain.ql`n  (entry -> action call-graph reachability), KnownYsoserialGadgetClasses.ql`n  (catalog: InvokerTransformer, TemplatesImpl, BeanComparator, ...).
+- GadgetModel.qll models entry/link/action, restricted to target source.
+- New suites java-gadgets.qls and java-all.qls (10 Java queries total).
+- Tests: 4 gadget fixtures (vulnerable flagged, safe not); 11/11 tests pass.
+- Real-DB check: gadget queries give 0 false positives on the generic
+  examples/java DeserTarget database.
+
 ## 0.0.4 — 2026-06-30
 - Deep-debug validation: ran all packs against real CodeQL databases built from
   a comprehensive xamples/ target (8 Java sinks across 8 frameworks + 6

@@ -104,3 +104,17 @@ remote flow) and `pickle.loads(b"\x80\x04\x95")` (L79, constant input).
   `pandas.read_pickle`.
 - The framework-specific queries (Dubbo/RMI/Spring) introduce **no false
   positives** on generic deserialization code.
+
+## Java gadgets — `tests/java/gadgettest/` (ysoserial-style)
+
+| Query | Results | Notes |
+|---|---|---|
+| `java/deserialization/gadget-entry` | 2 | `EvilGadget.readObject`, `SafeGadget.readObject` (both are entry points; JDK internals excluded via `fromSource()`) |
+| `java/deserialization/gadget-action` | 2 | `EvilGadget` `Runtime.exec`, `EvilHandler` `Method.invoke` |
+| `java/deserialization/gadget-chain` | 1 | `EvilGadget.readObject` -> `exec` (safe `SafeGadget` correctly not chained) |
+| `java/deserialization/known-gadget-class` | 1 | `org.apache.commons.collections.functors.InvokerTransformer` stub |
+
+Cross-check: running the combined `java-all.qls` suite against the generic
+`examples/java` DeserTarget database yields **0** results for all four gadget
+queries (no false positives on code that only calls deserialization sinks but
+defines no gadgets).

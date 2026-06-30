@@ -1,0 +1,1 @@
+| stubs/org/apache/commons/collections/functors/InvokerTransformer.java:2:14:2:31 | InvokerTransformer | Known ysoserial gadget class: InvokerTransformer is part of the ysoserial payload catalog and can weaponise a deserialization sink. |

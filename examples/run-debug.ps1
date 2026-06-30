@@ -27,7 +27,7 @@ function Summary($sarif, $label) {
 $jdb = Join-Path $work "java-db"
 & $codeql database create $jdb --language=java --source-root="$root\examples\java" `
   --command="$root\examples\java\build.cmd" --overwrite 2>&1 | Out-Null
-& $codeql database analyze $jdb "$root\java\suites\java-deserialization.qls" `
+& $codeql database analyze $jdb "$root\java\suites\java-all.qls" `
   --format=sarif-latest --output="$work\java.sarif" --search-path="$root\java" 2>&1 | Out-Null
 Summary "$work\java.sarif" "Java: our suite (examples/java)"
 

@@ -1,0 +1,1 @@
+| gadgettest/EvilGadget.java:12:18:12:27 | readObject | Gadget chain: EvilGadget.readObject() reaches exec(), a deserialization RCE gadget. |

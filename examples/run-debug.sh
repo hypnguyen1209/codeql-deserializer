@@ -20,7 +20,7 @@ PY
 JDB="$WORK/java-db"
 codeql database create "$JDB" --language=java --source-root="$ROOT/examples/java" \
   --command="$ROOT/examples/java/build.sh" --overwrite >/dev/null
-codeql database analyze "$JDB" "$ROOT/java/suites/java-deserialization.qls" \
+codeql database analyze "$JDB" "$ROOT/java/suites/java-all.qls" \
   --format=sarif-latest --output="$WORK/java.sarif" --search-path="$ROOT/java" >/dev/null
 summarize "$WORK/java.sarif" "Java: our suite (examples/java)"
 
