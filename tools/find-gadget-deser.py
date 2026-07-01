@@ -26,7 +26,7 @@ Requires:
   - CodeQL CLI on PATH; local packs installed: codeql pack install java/qlpack.yml
   - a Java runtime on PATH (to run the CFR/Procyon decompiler) - or set JAVA_HOME
   - internet on first run to fetch the CFR/Procyon decompiler into tools/.cache
-    (or pass --decompiler-jar); for --decompiler jadx, jadx must be on PATH
+    (or pass --decompiler-jar); jadx is auto-downloaded as a standalone too
 """
 import argparse
 import hashlib
@@ -40,11 +40,14 @@ import zipfile
 import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Downloadable decompiler jars (jadx is a separate CLI expected on PATH).
+# Downloadable decompilers (all auto-fetched to tools/.cache; no manual install).
 DECOMPILER_URLS = {
     "cfr": "https://repo1.maven.org/maven2/org/benf/cfr/0.152/cfr-0.152.jar",
     "procyon": "https://github.com/mstrobel/procyon/releases/download/v0.6.0/procyon-decompiler-0.6.0.jar",
 }
+# jadx ships as a zip (bin/jadx[.bat] + lib/), not a single jar -> handled separately.
+JADX_VERSION = "1.5.5"
+JADX_URL = f"https://github.com/skylot/jadx/releases/download/v{JADX_VERSION}/jadx-{JADX_VERSION}.zip"
 TEMPLATE = os.path.join(REPO, "java", "_generated", "_ReachableFromStartTemplate.ql")
 SEARCH = os.path.join(REPO, "java")
 SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "deserialization": 0, "info": 4}
@@ -69,6 +72,35 @@ def get_decompiler_jar(name, override):
         print(f"[find-gadget-deser] downloading {name} decompiler -> {jarpath}", file=sys.stderr)
         urllib.request.urlretrieve(DECOMPILER_URLS[name], jarpath)
     return jarpath
+
+
+def get_jadx():
+    """Return a launcher for a self-contained standalone jadx, downloading the
+    release zip into tools/.cache/jadx on first use. We deliberately do NOT reuse a
+    `jadx` found on PATH: a user's PATH `jadx` is frequently a jadx-GUI shim that
+    ignores CLI decompile args (produces zero files). Pass --decompiler-jar to
+    force a specific jadx launcher."""
+    cache = os.path.join(REPO, "tools", ".cache")
+    jadx_dir = os.path.join(cache, "jadx")
+    launcher = os.path.join(jadx_dir, "bin", "jadx.bat" if os.name == "nt" else "jadx")
+    if not os.path.exists(launcher):
+        os.makedirs(jadx_dir, exist_ok=True)
+        zpath = os.path.join(cache, f"jadx-{JADX_VERSION}.zip")
+        if not os.path.exists(zpath):
+            print(f"[find-gadget-deser] downloading jadx {JADX_VERSION} -> {zpath}", file=sys.stderr)
+            urllib.request.urlretrieve(JADX_URL, zpath)
+        print(f"[find-gadget-deser] extracting standalone jadx -> {jadx_dir}", file=sys.stderr)
+        with zipfile.ZipFile(zpath) as z:
+            z.extractall(jadx_dir)
+        if os.name != "nt":
+            for b in ("jadx", "jadx-gui"):
+                p = os.path.join(jadx_dir, "bin", b)
+                if os.path.exists(p):
+                    try:
+                        os.chmod(p, 0o755)
+                    except OSError:
+                        pass
+    return launcher
 
 
 def collect_jars(primary_jar, workdir, include_nested, cap=2000):
@@ -119,7 +151,7 @@ def decompile(java, decompiler, decompiler_jar, jar, outdir):
     elif decompiler == "procyon":
         cmd = [java, "-jar", decompiler_jar, "-o", outdir, jar]
     elif decompiler == "jadx":
-        jadx = shutil.which("jadx") or "jadx"
+        jadx = decompiler_jar or "jadx"   # standalone launcher from get_jadx() (or --decompiler-jar)
         cmd = [jadx, "--no-res", "-d", outdir, jar]
     else:
         print(f"[find-gadget-deser] ERROR: unknown decompiler {decompiler!r}.", file=sys.stderr)
@@ -244,7 +276,8 @@ def main():
     ap.add_argument("--start-class", required=True, help="entry class, e.g. MainWebSpring or com.example.MainWebSpring")
     ap.add_argument("--full", action="store_true", help="also run the full gadget/sink suite (global)")
     ap.add_argument("--decompiler", choices=["cfr", "procyon", "jadx"], default="cfr",
-                    help="decompiler: cfr (default) / procyon (auto-downloaded jar) / jadx (must be on PATH). "
+                    help="decompiler: cfr (default) / procyon / jadx - ALL auto-downloaded to tools/.cache "
+                         "(jadx as a standalone zip; a jadx already on PATH is reused). "
                          "Try procyon or jadx when CFR emits code CodeQL cannot parse on large/obfuscated jars.")
     ap.add_argument("--decompiler-jar", default=None,
                     help="override path to the cfr/procyon jar (default: auto-download to tools/.cache)")
@@ -281,6 +314,8 @@ def main():
         if args.decompiler in ("cfr", "procyon"):
             override = args.decompiler_jar or (args.cfr if args.decompiler == "cfr" else None)
             decompiler_jar = get_decompiler_jar(args.decompiler, override)
+        elif args.decompiler == "jadx":
+            decompiler_jar = args.decompiler_jar or get_jadx()
         # Fat/uber jars (Spring Boot BOOT-INF/lib, WAR WEB-INF/lib) bundle their
         # dependencies as nested jars; gadgets almost always live in those deps, so
         # decompile every nested jar too (not just the outer one) into one src tree.

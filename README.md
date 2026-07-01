@@ -52,8 +52,8 @@ A deserialization exploit needs three things. The pack finds each:
 | **CodeQL CLI** ≥ 2.20 | all queries & tools | [releases](https://github.com/github/codeql-cli-binaries/releases) → `codeql` on PATH |
 | **Python 3** | `tools/hunt.py`, `tools/find-gadget-deser.py` | on PATH |
 | **Java 17+** | `find-gadget-deser.py` (runs CFR) & Java DBs | on PATH or `JAVA_HOME` |
-| **CFR decompiler** | `find-gadget-deser.py` only | auto-downloaded to `tools/.cache/cfr.jar` (or `--cfr <path>`) |
-| **internet (1st run)** | `codeql pack install` + first CFR fetch | pulls `codeql/java-all`, `codeql/python-all` from GHCR + CFR from Maven Central |
+| **Decompiler** (CFR/Procyon/jadx) | `find-gadget-deser.py` only | **all auto-downloaded** to `tools/.cache` (CFR/Procyon jars, jadx standalone zip); or `--decompiler-jar <path>` |
+| **internet (1st run)** | `codeql pack install` + first decompiler fetch | pulls `codeql/java-all`, `codeql/python-all` from GHCR + the chosen decompiler (Maven Central / GitHub releases) |
 
 The packs' only real dependency is the official library packs (declared in each
 `qlpack.yml`): `hypnguyen1209/java-deserialization` → `codeql/java-all`,
@@ -84,7 +84,7 @@ python tools/hunt.py path/to/java-src --command "mvn -B compile -q"
 ```
 
 **B — Compiled JAR + entry class** (`tools/find-gadget-deser.py`):
-decompiles the jar (CFR by default; `--decompiler procyon|jadx` for jars CFR chokes on) → buildless DB → reports chains **from your start class**
+decompiles the jar (CFR by default; `--decompiler procyon|jadx` — all three auto-downloaded to `tools/.cache`, no manual install — for jars CFR chokes on) → buildless DB → reports chains **from your start class**
 to any dangerous sink (deserialize **or** RCE action), via the call graph. For
 **fat/uber jars** (Spring Boot `BOOT-INF/lib/*.jar`, WAR `WEB-INF/lib/*.jar`, …) it
 also extracts and decompiles every **bundled dependency jar** — gadgets almost always

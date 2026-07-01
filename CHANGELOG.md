@@ -1,6 +1,11 @@
 # Changelog
 
 ## 0.1.0 — 2026-07-01
+- find-gadget-deser.py **auto-downloads jadx** as a self-contained standalone
+  (`tools/.cache/jadx/`, pinned v1.5.5) just like CFR/Procyon, so `--decompiler jadx`
+  needs no manual install. It deliberately does NOT reuse a `jadx` on PATH (a user's
+  PATH jadx is often a jadx-GUI shim that ignores CLI args and decompiles nothing);
+  use `--decompiler-jar` to force a specific launcher.
 - find-gadget-deser.py now descends into **nested dependency jars** of fat/uber jars
   (Spring Boot `BOOT-INF/lib/*.jar`, WAR `WEB-INF/lib/*.jar`, recursively): it extracts
   and decompiles every bundled jar into one source tree, so gadget chains that live in
