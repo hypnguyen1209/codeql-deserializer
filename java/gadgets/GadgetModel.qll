@@ -148,18 +148,38 @@ predicate dispatchEdge(Method src, GadgetLinkMethod dst) {
   )
 }
 
-/** Holds if gadget entry `entry` reaches action `action` (calls* + dispatch edges). */
-predicate gadgetReachableAction(GadgetEntryPoint entry, GadgetActionCall action) {
-  entry.calls*(action.getCaller())
+/**
+ * Maximum number of call-graph hops explored by the reachability predicates
+ * below. A depth cap keeps the transitive closure from blowing up on very large
+ * databases (real ysoserial-style chains are well under this many hops). Raise it
+ * only if you knowingly hunt very deep chains.
+ */
+int gadgetMaxCallDepth() { result = 10 }
+
+/** Holds if `dst` is reachable from `src` in exactly `d` (0..cap) `calls` hops. */
+private predicate callsAtDepth(Callable src, Callable dst, int d) {
+  src = dst and d = 0
   or
-  exists(GadgetLinkMethod link | dispatchEdge+(entry, link) and link.calls*(action.getCaller()))
+  d in [1 .. gadgetMaxCallDepth()] and
+  exists(Callable mid | callsAtDepth(src, mid, d - 1) and mid.calls(dst))
 }
 
-/** Holds if gadget dispatch `link` reaches action `action` (calls* + dispatch edges). */
-predicate gadgetLinkReachesAction(GadgetLinkMethod link, GadgetActionCall action) {
-  link.calls*(action.getCaller())
+/** Reflexive-transitive `calls`, bounded to `gadgetMaxCallDepth()` hops (the
+ *  depth-capped replacement for `calls*`). */
+predicate callsWithinDepth(Callable src, Callable dst) { callsAtDepth(src, dst, _) }
+
+/** Holds if gadget entry `entry` reaches action `action` (bounded calls + dispatch edges). */
+predicate gadgetReachableAction(GadgetEntryPoint entry, GadgetActionCall action) {
+  callsWithinDepth(entry, action.getCaller())
   or
-  exists(GadgetLinkMethod l2 | dispatchEdge+(link, l2) and l2.calls*(action.getCaller()))
+  exists(GadgetLinkMethod link | dispatchEdge+(entry, link) and callsWithinDepth(link, action.getCaller()))
+}
+
+/** Holds if gadget dispatch `link` reaches action `action` (bounded calls + dispatch edges). */
+predicate gadgetLinkReachesAction(GadgetLinkMethod link, GadgetActionCall action) {
+  callsWithinDepth(link, action.getCaller())
+  or
+  exists(GadgetLinkMethod l2 | dispatchEdge+(link, l2) and callsWithinDepth(l2, action.getCaller()))
 }
 
 /** Holds if `t` is one of the well-known ysoserial gadget source classes. */

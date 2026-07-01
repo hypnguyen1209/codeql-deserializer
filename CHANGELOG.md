@@ -12,8 +12,17 @@
   gadget reachability beyond the static call graph.
 - #5 Expanded action catalog: JMX MBeanServer.invoke, Groovy GroovyShell/GroovyClassLoader,
   JShell, OGNL, MVEL, Spring SpEL, Velocity, Freemarker; + expanded known-gadget catalog.
-- #3 Tooling quick wins: --threads, --sarif output, DB cache by jar sha256,
-  --keep-decompiled in find-gadget-deser.py; --threads/--sarif in hunt.py.
+- #3 Tooling quick wins:
+  - `--threads` now defaults to **0 (one per core)** and is passed to *both*
+    `database create` and `database analyze` in hunt.py and find-gadget-deser.py
+    (they no longer run single-threaded).
+  - **SARIF is always emitted** alongside the Markdown report (`<out>.sarif`), not
+    only when `--sarif` is passed — open it in VS Code / GitHub code scanning.
+  - find-gadget-deser.py **skips CFR decompile+build when the DB is already cached**
+    for the jar's sha256 (re-runs no longer rebuild from scratch); `--keep-decompiled`.
+  - **Depth cap** on call-graph reachability: `gadgetMaxCallDepth()` (10 hops) bounds
+    the `calls*` closures in GadgetModel + HuntReachabilityModel so queries don't blow
+    up on huge decompiled-jar databases.
 - #2 benchmark/: cc1 (commons-collections-style) + beanutils BeanComparator + safe
   control, with bench.py measuring recall/precision. Currently recall 100%, precision 100%
   (bench caught a real fixture bug: LazyMap must implement Map to be a recognized dispatch link).

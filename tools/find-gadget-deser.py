@@ -80,7 +80,7 @@ def build_db(codeql, src, db, threads=None):
         return True
     cmd = [codeql, "database", "create", db, "--language=java",
            "--source-root=" + src, "--build-mode=none", "--overwrite"]
-    if threads:
+    if threads is not None:
         cmd += ["--threads=" + str(threads)]
     r = subprocess.run(cmd)
     if r.returncode != 0:
@@ -103,7 +103,7 @@ def gen_query(start_class):
 def analyze(codeql, db, ql, sarif, threads=None):
     cmd = [codeql, "database", "analyze", db, ql,
            "--format=sarif-latest", "--output=" + sarif, "--search-path=" + SEARCH]
-    if threads:
+    if threads is not None:
         cmd += ["--threads=" + str(threads)]
     return subprocess.run(cmd).returncode == 0
 
@@ -181,8 +181,10 @@ def main():
     ap.add_argument("--cfr", default=None, help="path to cfr.jar (default: auto-download to tools/.cache)")
     ap.add_argument("--codeql", default="codeql", help="path to codeql CLI")
     ap.add_argument("--out", default=None, help="report markdown path")
-    ap.add_argument("--threads", type=int, default=None, help="CodeQL --threads=N")
-    ap.add_argument("--sarif", default=None, help="also keep the SARIF at this path")
+    ap.add_argument("--threads", type=int, default=0,
+                    help="CodeQL --threads=N for create+analyze (default 0 = one per core)")
+    ap.add_argument("--sarif", default=None,
+                    help="SARIF output path (default: alongside the report as <out>.sarif; also fed to gen-poc.py)")
     ap.add_argument("--keep-decompiled", action="store_true", help="keep the decompiled source dir")
     ap.add_argument("--cache-db", default=None, help="reuse a DB dir cached by jar hash (default: tempdir)")
     args = ap.parse_args()
@@ -190,14 +192,20 @@ def main():
     java = find_java()
     if not java:
         print("[find-gadget-deser] ERROR: no java runtime found (set JAVA_HOME).", file=sys.stderr); sys.exit(1)
-    cfr = get_cfr(args.cfr)
     jar_hash = hashlib.sha256(open(args.jar, "rb").read()).hexdigest()[:16]
     db = args.cache_db or os.path.join(tempfile.gettempdir(), "fgd-db-" + jar_hash)
+    db_cached = os.path.isdir(db) and os.path.exists(os.path.join(db, "codeql-database.yml"))
     work = tempfile.mkdtemp(prefix="find-gadget-deser-")
     src = os.path.join(work, "src")
     print(f"[find-gadget-deser] jar={args.jar} start-class={args.start_class} (db cache: {db})", file=sys.stderr)
-    if not decompile(java, cfr, args.jar, src):
-        sys.exit(1)
+    # Decompilation (CFR) only feeds the DB build; skip it entirely when the DB is
+    # already cached for this jar sha256 (unless --keep-decompiled asks for source).
+    if db_cached and not args.keep_decompiled:
+        print(f"[find-gadget-deser] DB cached for jar sha256={jar_hash}; skipping decompile+build", file=sys.stderr)
+    else:
+        cfr = get_cfr(args.cfr)
+        if not decompile(java, cfr, args.jar, src):
+            sys.exit(1)
     if not build_db(args.codeql, src, db, args.threads):
         sys.exit(1)
 
@@ -210,9 +218,6 @@ def main():
     sarif = os.path.join(work, "reachable.sarif")
     if not analyze(args.codeql, db, ql, sarif, args.threads):
         sys.exit(1)
-    if args.sarif:
-        shutil.copy(sarif, args.sarif)
-        print(f"[find-gadget-deser] SARIF kept at {args.sarif}", file=sys.stderr)
 
     full_sarif = None
     if args.full:
@@ -222,6 +227,10 @@ def main():
         analyze(args.codeql, db, suite, full_sarif, args.threads)
 
     out_md = args.out or os.path.join(os.getcwd(), "find-gadget-deser-report.md")
+    # Always keep the scoped SARIF (for VS Code / GitHub code scanning and gen-poc.py).
+    sarif_out = args.sarif or os.path.splitext(out_md)[0] + ".sarif"
+    shutil.copy(sarif, sarif_out)
+    print(f"[find-gadget-deser] SARIF -> {sarif_out}  (feed to: python3 tools/gen-poc.py --sarif {sarif_out})", file=sys.stderr)
     report(sarif, out_md, args.jar, args.start_class, full_sarif)
     if args.keep_decompiled:
         print(f"[find-gadget-deser] decompiled source kept at {src}", file=sys.stderr)

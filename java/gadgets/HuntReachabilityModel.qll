@@ -35,8 +35,10 @@ class DangerousCall extends MethodCall {
 
 /**
  * Holds if dangerous call `sink` is reachable from start method `start` through
- * the call graph (reflexive-transitive `calls*`, following virtual dispatch).
+ * the call graph (reflexive-transitive `calls`, following virtual dispatch),
+ * bounded to `gadgetMaxCallDepth()` hops so the closure stays tractable on the
+ * huge decompiled-jar databases this tool is pointed at.
  */
 predicate reachableDangerousFrom(Method start, DangerousCall sink) {
-  start.calls*(sink.getCaller())
+  callsWithinDepth(start, sink.getCaller())
 }

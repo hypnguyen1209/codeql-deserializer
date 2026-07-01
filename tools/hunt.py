@@ -43,12 +43,14 @@ def run(cmd):
     return subprocess.run(cmd)
 
 
-def build_db(codeql, lang, target, db, command):
+def build_db(codeql, lang, target, db, command, threads=None):
     if os.path.isdir(db) and os.path.exists(os.path.join(db, "codeql-database.yml")):
         print(f"[hunt] reusing existing database at {db}", file=sys.stderr)
         return True
     cmd = [codeql, "database", "create", db, "--language=" + lang,
            "--source-root=" + target, "--overwrite"]
+    if threads is not None:
+        cmd += ["--threads=" + str(threads)]
     if command:
         cmd += ["--command=" + command]
     elif lang == "java":
@@ -67,7 +69,7 @@ def build_db(codeql, lang, target, db, command):
 def analyze(codeql, db, suite, search, sarif, threads=None):
     cmd = [codeql, "database", "analyze", db, suite,
            "--format=sarif-latest", "--output=" + sarif, "--search-path=" + search]
-    if threads:
+    if threads is not None:
         cmd += ["--threads=" + str(threads)]
     r = run(cmd)
     return r.returncode == 0
@@ -135,8 +137,10 @@ def main():
     ap.add_argument("--command", default=None, help="build command (default: buildless for Java)")
     ap.add_argument("--codeql", default="codeql", help="path to codeql CLI")
     ap.add_argument("--out", default=None, help="report markdown path")
-    ap.add_argument("--threads", type=int, default=None, help="CodeQL --threads=N")
-    ap.add_argument("--sarif", default=None, help="also keep the SARIF at this path")
+    ap.add_argument("--threads", type=int, default=0,
+                    help="CodeQL --threads=N for create+analyze (default 0 = one per core; the tools no longer run single-threaded)")
+    ap.add_argument("--sarif", default=None,
+                    help="SARIF output path (default: alongside the Markdown report as <out>.sarif)")
     args = ap.parse_args()
 
     suite = SUITES.get((args.lang, args.mode))
@@ -148,16 +152,17 @@ def main():
 
     db = args.db or os.path.join(tempfile.gettempdir(), "hunt-db")
     print(f"[hunt] language={args.lang} mode={args.mode} target={args.target}", file=sys.stderr)
-    if not build_db(args.codeql, args.lang, args.target, db, args.command):
+    if not build_db(args.codeql, args.lang, args.target, db, args.command, args.threads):
         sys.exit(1)
     sarif = os.path.join(tempfile.gettempdir(), "hunt.sarif")
     print(f"[hunt] running suite {suite}", file=sys.stderr)
     if not analyze(args.codeql, db, suite_path, search, sarif, args.threads):
         sys.exit(1)
-    if args.sarif:
-        shutil.copy(sarif, args.sarif)
-        print(f"[hunt] SARIF kept at {args.sarif}", file=sys.stderr)
     out_md = args.out or os.path.join(os.getcwd(), "hunt-report.md")
+    # Always emit SARIF (for VS Code / GitHub code scanning), not just Markdown.
+    sarif_out = args.sarif or os.path.splitext(out_md)[0] + ".sarif"
+    shutil.copy(sarif, sarif_out)
+    print(f"[hunt] SARIF -> {sarif_out}", file=sys.stderr)
     report(sarif, out_md, args.lang, args.mode, args.target)
 
 
