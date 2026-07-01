@@ -3,7 +3,10 @@
 find-gadget-deser.py - scoped deserialization/gadget chain finder for a JAR.
 
 Given a compiled Java archive and an entry/start class, this tool:
-  1. decompiles the jar to Java source (CFR),
+  0. for fat/uber jars (Spring Boot BOOT-INF/lib, WAR WEB-INF/lib, ...), also
+     extracts and decompiles every *bundled dependency jar* - gadgets almost always
+     live in dependencies, so without this they would be invisible,
+  1. decompiles the jar(s) to Java source (CFR/Procyon/jadx),
   2. builds a buildless CodeQL database (no Maven/Gradle/deps needed; cached by
      jar sha256 so re-runs are fast),
   3. runs a generated reachability query scoped to the start class that reports
@@ -33,6 +36,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
 import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -65,6 +69,44 @@ def get_decompiler_jar(name, override):
         print(f"[find-gadget-deser] downloading {name} decompiler -> {jarpath}", file=sys.stderr)
         urllib.request.urlretrieve(DECOMPILER_URLS[name], jarpath)
     return jarpath
+
+
+def collect_jars(primary_jar, workdir, include_nested, cap=2000):
+    """Return a list of (jarpath, label) to decompile: the primary jar plus any
+    *.jar bundled inside it (Spring Boot `BOOT-INF/lib/`, WAR `WEB-INF/lib/`, or
+    anywhere) - recursively. Nested jars are extracted under `workdir`. Without
+    this, decompilers only see the outer jar's own classes and miss every gadget
+    that lives in a bundled dependency."""
+    jars = [(primary_jar, "root")]
+    if not include_nested:
+        return jars
+    extract_root = os.path.join(workdir, "nested")
+    n = 0
+    queue = [primary_jar]
+    while queue and n < cap:
+        jar = queue.pop()
+        try:
+            zf = zipfile.ZipFile(jar)
+        except (zipfile.BadZipFile, OSError):
+            continue
+        with zf:
+            for name in zf.namelist():
+                if not name.lower().endswith(".jar"):
+                    continue
+                os.makedirs(extract_root, exist_ok=True)
+                target = os.path.join(extract_root, f"{n:04d}_{os.path.basename(name)}")
+                try:
+                    with zf.open(name) as s, open(target, "wb") as d:
+                        shutil.copyfileobj(s, d)
+                except OSError:
+                    continue
+                jars.append((target, os.path.splitext(os.path.basename(name))[0]))
+                queue.append(target)
+                n += 1
+                if n >= cap:
+                    print(f"[find-gadget-deser] WARNING: nested-jar cap {cap} reached; some deps skipped", file=sys.stderr)
+                    break
+    return jars
 
 
 def decompile(java, decompiler, decompiler_jar, jar, outdir):
@@ -215,6 +257,9 @@ def main():
                     help="SARIF output path (default: alongside the report as <out>.sarif; also fed to gen-poc.py)")
     ap.add_argument("--keep-decompiled", action="store_true", help="keep the decompiled source dir")
     ap.add_argument("--cache-db", default=None, help="reuse a DB dir cached by jar hash (default: tempdir)")
+    ap.add_argument("--skip-nested-jars", action="store_true",
+                    help="do NOT descend into bundled dependency jars (BOOT-INF/lib, WEB-INF/lib, ...); "
+                         "by default nested jars ARE decompiled so gadgets in dependencies are found")
     args = ap.parse_args()
 
     java = find_java()
@@ -236,9 +281,22 @@ def main():
         if args.decompiler in ("cfr", "procyon"):
             override = args.decompiler_jar or (args.cfr if args.decompiler == "cfr" else None)
             decompiler_jar = get_decompiler_jar(args.decompiler, override)
-        srcroot = decompile(java, args.decompiler, decompiler_jar, args.jar, src)
-        if srcroot is None:
+        # Fat/uber jars (Spring Boot BOOT-INF/lib, WAR WEB-INF/lib) bundle their
+        # dependencies as nested jars; gadgets almost always live in those deps, so
+        # decompile every nested jar too (not just the outer one) into one src tree.
+        jars = collect_jars(args.jar, work, not args.skip_nested_jars)
+        nested = len(jars) - 1
+        if nested > 0:
+            print(f"[find-gadget-deser] fat/uber jar: found {nested} nested dependency jar(s); "
+                  f"decompiling all (use --skip-nested-jars to skip)", file=sys.stderr)
+        ok = 0
+        for idx, (jarpath, label) in enumerate(jars):
+            if decompile(java, args.decompiler, decompiler_jar, jarpath, os.path.join(src, f"{idx:04d}_{label}")) is not None:
+                ok += 1
+        if ok == 0:
+            print("[find-gadget-deser] ERROR: nothing decompiled.", file=sys.stderr)
             sys.exit(1)
+        srcroot = src
     if not build_db(args.codeql, srcroot, db, args.threads):
         sys.exit(1)
 

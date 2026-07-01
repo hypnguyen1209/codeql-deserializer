@@ -1,6 +1,12 @@
 # Changelog
 
 ## 0.1.0 — 2026-07-01
+- find-gadget-deser.py now descends into **nested dependency jars** of fat/uber jars
+  (Spring Boot `BOOT-INF/lib/*.jar`, WAR `WEB-INF/lib/*.jar`, recursively): it extracts
+  and decompiles every bundled jar into one source tree, so gadget chains that live in
+  **dependencies** (where they almost always are) are found — previously only the outer
+  jar's own classes were decompiled and such gadgets were invisible. `--skip-nested-jars`
+  opts out. Verified: a gadget in `BOOT-INF/lib/*.jar` is now flagged by every gadget query.
 - #1 GadgetChainPath.ql: real **`@kind path-problem`** gadget chain. Builds its own
   PathGraph over the static call graph + framework-dispatch edges (depth-capped to
   8 hops) so the full chain `readObject -> ... -> hashCode -> invoke -> exec` renders

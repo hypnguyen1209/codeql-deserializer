@@ -85,11 +85,15 @@ python tools/hunt.py path/to/java-src --command "mvn -B compile -q"
 
 **B — Compiled JAR + entry class** (`tools/find-gadget-deser.py`):
 decompiles the jar (CFR by default; `--decompiler procyon|jadx` for jars CFR chokes on) → buildless DB → reports chains **from your start class**
-to any dangerous sink (deserialize **or** RCE action), via the call graph:
+to any dangerous sink (deserialize **or** RCE action), via the call graph. For
+**fat/uber jars** (Spring Boot `BOOT-INF/lib/*.jar`, WAR `WEB-INF/lib/*.jar`, …) it
+also extracts and decompiles every **bundled dependency jar** — gadgets almost always
+live in dependencies, so without this they'd be invisible (`--skip-nested-jars` to opt out):
 
 ```bash
 python3 tools/find-gadget-deser.py --jar app.jar --start-class MainWebSpring          # scoped chains
 python3 tools/find-gadget-deser.py --jar app.jar --start-class com.example.MainWebSpring --full
+python3 tools/find-gadget-deser.py --jar springboot-fat.jar --start-class com.example.Application --full  # scans BOOT-INF/lib gadgets
 ```
 
 **C — Python source:**
