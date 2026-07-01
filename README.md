@@ -1,169 +1,196 @@
-# java/python deserialization — CodeQL query packs (daily gadget hunting)
+# codeql-deserializer
 
-Curated [CodeQL](https://codeql.github.com/) query packs for finding
-**deserialization sinks**, **source-to-sink chains** and **ysoserial-style
-gadget chains** in **Java** and **Python** codebases. Comes with a buildless
-hunting CLI so a researcher can point it at any Java source tree and get a
-ranked gadget report without Maven/Gradle/deps.
+> CodeQL query packs + CLI tools for hunting **deserialization sinks, source-to-sink chains and ysoserial-style gadget chains** in Java & Python.
 
-- Java pack: `hypnguyen1209/java-deserialization` (depends on `codeql/java-all`)
-- Python pack: `hypnguyen1209/python-deserialization` (depends on `codeql/python-all`)
-- **14 queries** (12 Java + 2 Python), **13/13 tests pass**, validated against
-  real databases including `frohoff/ysoserial` itself.
+[![CI](https://github.com/hypnguyen1209/codeql-deserializer/actions/workflows/check-queries.yml/badge.svg)](https://github.com/hypnguyen1209/codeql-deserializer/actions/workflows/check-queries.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+![Queries](https://img.shields.io/badge/queries-14-blue)
+![Tests](https://img.shields.io/badge/tests-13%2F13-brightgreen)
 
-> ⚠️ **Authorization** — Only run these queries against code you own or are
-> explicitly authorized to assess. The repo also ships vulnerable **test**
-> fixtures; never deploy them.
+## What this is
 
----
+Two [CodeQL](https://codeql.github.com/) query packs (`hypnguyen1209/java-deserialization`,
+`hypnguyen1209/python-deserialization`) plus two hunting CLIs that turn CodeQL into a
+daily driver for deserialization research. Given Java or Python source (or a compiled
+`.jar`), it tells you **where untrusted data is deserialized** and **which gadget chains
+could weaponise it** — without you writing any CodeQL.
 
-## Prerequisites & external dependencies
+- **14 queries** (12 Java + 2 Python), **13/13 tests pass**, CI-verified on Ubuntu.
+- Reuses GitHub's official `codeql/java-all` + `codeql/python-all` models (no hand-rolled
+  sink logic that drifts); adds framework-specific chains (Dubbo, RMI, Spring) and a
+  ysoserial-style gadget model.
+- Validated on real databases, including `frohoff/ysoserial` itself.
 
-| Need | For | How |
-|---|---|---|
-| **CodeQL CLI** (≥ 2.20) | all queries/tools | https://github.com/github/codeql-cli-binaries/releases — `codeql` on PATH |
-| **Python 3** | `tools/hunt.py`, `tools/find-gadget-deser.py` | on PATH |
-| **Java 17+ runtime** (`java`) | `find-gadget-deser.py` (runs CFR), building Java DBs | on PATH or `JAVA_HOME` |
-| **CFR decompiler** | `find-gadget-deser.py` only | auto-downloaded to `tools/.cache/cfr.jar` on first run (or `--cfr path`) |
-| **internet (first run)** | `codeql pack install` + first CFR download | pulls `codeql/java-all`, `codeql/python-all` from GHCR and CFR from Maven Central |
+> ⚠️ **Authorization** — run only against code you own or are authorized to assess.
+> The repo ships vulnerable **test** fixtures; never deploy them.
 
-The **query packs** themselves depend only on GitHub's official library packs,
-declared in each `qlpack.yml`:
-- `hypnguyen1209/java-deserialization` → `codeql/java-all`
-- `hypnguyen1209/python-deserialization` → `codeql/python-all`
+## How it works (mental model)
 
-These are fetched automatically by `codeql pack install java/qlpack.yml
-python/qlpack.yml` (or by the workspace `codeql-workspace.yml`). No other
-external projects or folders are required — everything else (tests, examples,
-tools) is self-contained in this repo. See
-[`docs/references.md`](./docs/references.md) for provenance/attribution of the
-adapted queries.
-## Daily hunting (start here)
+A deserialization exploit needs three things. The pack finds each:
 
-```bash
-codeql pack install java/qlpack.yml python/qlpack.yml
-
-# Point it at ANY Java source (buildless — no Maven/Gradle/deps needed):
-python tools/hunt.py /path/to/target --mode full   --out report.md   # sinks + chains + gadgets
-python tools/hunt.py /path/to/target --mode gadgets --out gadgets.md # ysoserial-style gadget queries
-python tools/hunt.py /path/to/target --lang python                    # Python sinks/chains
-python tools/hunt.py /path/to/target --command "mvn -B compile -q"   # real build if you want stronger types
+```
+   SOURCE  ──(flow)──▶  SINK  ──(call graph)──▶  ACTION
+   remote/user data   readObject()/pickle    Runtime.exec / Method.invoke / JNDI.lookup
+                      ObjectInputStream       Templates.newTransformer / ClassLoader.loadClass ...
 ```
 
-`tools/hunt.py` builds a CodeQL database (`--build-mode=none` for Java by
-default), runs the chosen suite, and writes a Markdown report grouped by rule
-and sorted by severity (`[critical]` > `[high]` > `[medium]`).
+| Concept | Question it answers | Java query `@id` |
+|---|---|---|
+| **Sink** | Where is untrusted data deserialized? | `java/deserialization/sink`, `unsafe-chain` |
+| **Chain** | Does a remote source reach the sink? | `java/deserialization/unsafe-chain` (path) |
+| **Gadget entry** | Which `Serializable.readObject`/`readResolve` run on attacker data? | `java/deserialization/gadget-entry` |
+| **Gadget action** | Which RCE primitive could a chain end in? | `java/deserialization/gadget-action` |
+| **Gadget chain** | Does a gadget entry reach an RCE action (call graph)? | `java/deserialization/gadget-chain` |
+| **Gadget dispatch** | Which "middle" gadget (InvocationHandler/Comparator/Map) reaches action? | `java/deserialization/gadget-dispatch` |
+| **Novel gadget** | Entry/dispatch → action, **not** in the known ysoserial catalog? | `java/deserialization/novel-gadget` |
+| **Known gadget class** | Is a ysoserial catalog class present in source? | `java/deserialization/known-gadget-class` |
 
-**Validated on `frohoff/ysoserial`**: 48 findings — 1 `readObject -> exec`
-gadget chain, 45 RCE action calls (`Class.forName`, `Method.invoke`,
-`ClassLoader.loadClass`, `URL.openConnection`, `Runtime.exec`) across the
-payloads/exploit code, 1 gadget entry, 1 novel gadget. See
-[`examples/ysoserial-hunt-report.md`](./examples/ysoserial-hunt-report.md) and
-[`docs/hunting-guide.md`](./docs/hunting-guide.md) for the daily workflow.
+## Prerequisites
 
-### From a compiled JAR + an entry class
+| Need | For | Install |
+|---|---|---|
+| **CodeQL CLI** ≥ 2.20 | all queries & tools | [releases](https://github.com/github/codeql-cli-binaries/releases) → `codeql` on PATH |
+| **Python 3** | `tools/hunt.py`, `tools/find-gadget-deser.py` | on PATH |
+| **Java 17+** | `find-gadget-deser.py` (runs CFR) & Java DBs | on PATH or `JAVA_HOME` |
+| **CFR decompiler** | `find-gadget-deser.py` only | auto-downloaded to `tools/.cache/cfr.jar` (or `--cfr <path>`) |
+| **internet (1st run)** | `codeql pack install` + first CFR fetch | pulls `codeql/java-all`, `codeql/python-all` from GHCR + CFR from Maven Central |
 
-`tools/find-gadget-deser.py` decompiles a jar (CFR), builds a buildless CodeQL DB,
-and reports chains **from a chosen start class** to any dangerous sink
-(deserialization sink OR RCE gadget action) reachable via the call graph:
+The packs' only real dependency is the official library packs (declared in each
+`qlpack.yml`): `hypnguyen1209/java-deserialization` → `codeql/java-all`,
+`hypnguyen1209/python-deserialization` → `codeql/python-all`. Everything else
+(tests, examples, tools) is self-contained in this repo.
+
+## Quick start
+
+### 1 · Install the packs (one time)
 
 ```bash
-python3 tools/find-gadget-deser.py --jar app.jar --start-class MainWebSpring
+git clone https://github.com/hypnguyen1209/codeql-deserializer
+cd codeql-deserializer
+codeql pack install java/qlpack.yml python/qlpack.yml
+```
+
+### 2 · Hunt
+
+Pick the mode that matches what you have:
+
+**A — Java source tree** (`tools/hunt.py`, buildless — no Maven/Gradle/deps needed):
+
+```bash
+python tools/hunt.py path/to/java-src --mode full   --out report.md   # sinks + chains + gadgets
+python tools/hunt.py path/to/java-src --mode gadgets --out gadgets.md # ysoserial gadget queries only
+# optional real build for stronger type info:
+python tools/hunt.py path/to/java-src --command "mvn -B compile -q"
+```
+
+**B — Compiled JAR + entry class** (`tools/find-gadget-deser.py`):
+decompiles the jar (CFR) → buildless DB → reports chains **from your start class**
+to any dangerous sink (deserialize **or** RCE action), via the call graph:
+
+```bash
+python3 tools/find-gadget-deser.py --jar app.jar --start-class MainWebSpring          # scoped chains
 python3 tools/find-gadget-deser.py --jar app.jar --start-class com.example.MainWebSpring --full
 ```
-Example output on a tiny test app: `MainWebSpring.main()/handleRequest() ->
-deserialization (readObject)` and `MainWebSpring.main()/handleRequest()/process()
--> RCE:exec`. See [`examples/find-gadget-deser-report.md`](./examples/find-gadget-deser-report.md).
----
 
-## Packs
+**C — Python source:**
 
-| Pack | Registry name | Depends on |
+```bash
+python tools/hunt.py path/to/py-src --lang python --mode full --out report.md
+```
+
+Both tools print a ranked Markdown report (grouped by rule, sorted `[critical]` >
+`[high]` > `[medium]`) and write it to `--out`.
+
+### 3 · Read the report
+
+- **`Reachable from <start-class>`** = scoped chains from your entry (B) / per-rule
+  findings (A,C).
+- Triage order: `novel-gadget` + `gadget-dispatch` first (candidate new gadgets),
+  then `gadget-chain`/`unsafe-chain` (confirmed sinks), then `known-gadget-class`
+  (catalog hits that make a sink exploitable).
+
+See [`docs/hunting-guide.md`](./docs/hunting-guide.md) for the full daily workflow.
+
+## Query reference
+
+### Java — sinks & chains (reuse `codeql/java-all`)
+| `@id` | Kind | Finds |
 |---|---|---|
-| Java | `hypnguyen1209/java-deserialization` | `codeql/java-all` |
-| Python | `hypnguyen1209/python-deserialization` | `codeql/python-all` |
+| `java/deserialization/sink` | problem | every deserialization sink call (triage) |
+| `java/deserialization/unsafe-chain` | path | remote source → sink |
+| `java/deserialization/unsafe-type` | path | remote → polymorphic type descriptor (Jackson/Jodd/Gson) |
+| `java/deserialization/rmi` | path | RMI bind of a remote object with a complex-typed method |
+| `java/deserialization/spring-exporter` | problem | Spring remoting `@Bean` exporter that deserializes request bodies |
+| `java/deserialization/dubbo-chain` | path | Dubbo `Codec2.decodeBody` → `ObjectInput.readXXX` (CVE-2020-11995 style) |
+
+Covered sinks: `ObjectInputStream.readObject/readUnshared`, `XMLDecoder`, XStream,
+Kryo, SnakeYAML, Jackson polymorphic, Hessian/Burlap, Jodd, Gson, Fastjson, JsonIo,
+Jabsorb, `ObjectMessage.getObject()`. Recognized-safe variants are excluded:
+`ValidatingObjectInputStream`, `SerialKiller`, XStream/Kryo whitelist, SnakeYAML
+`SafeConstructor`, Jackson type validator.
+
+### Java — ysoserial-style gadgets (modelled on `frohoff/ysoserial`)
+| `@id` | Kind | Finds |
+|---|---|---|
+| `java/deserialization/gadget-entry` | problem | `Serializable` `readObject`/`readResolve`/`readExternal`/`readObjectNoData` (chain start) |
+| `java/deserialization/gadget-action` | problem | RCE primitives: `Runtime.exec`, `Method.invoke`, `Class.forName`, `ClassLoader.loadClass`, `ScriptEngine.eval`, JNDI `lookup`, `Templates.newTransformer`, `URL.openConnection`, … |
+| `java/deserialization/gadget-chain` | problem | entry → action via the call graph |
+| `java/deserialization/gadget-dispatch` | problem | serializable "link" method (`InvocationHandler.invoke`, `Comparator.compare`, `Map.get/put`, `equals/hashCode/toString`) → action |
+| `java/deserialization/novel-gadget` | problem | entry/dispatch → action, **not** in the ysoserial catalog → candidate new gadget |
+| `java/deserialization/known-gadget-class` | problem | a class matching the ysoserial catalog (`InvokerTransformer`, `TemplatesImpl`, `BeanComparator`, `MethodClosure`, `JtaTransactionManager`, …) |
+
+### Python (reuse `codeql/python-all`)
+| `@id` | Kind | Finds |
+|---|---|---|
+| `python/deserialization/sink` | problem | every insecure decoding (pickle/cPickle/marshal/yaml/shelve/dill/jsonpickle/pandas.read_pickle) |
+| `python/deserialization/unsafe-chain` | path | remote source → insecure decoding sink |
 
 ## Repository layout
 
 ```
-.
-├── java/deserialization/        # sink + chain queries (reuse codeql/java-all model)
-│   ├── DeserializationSinks.ql          # every deserialization sink (problem)
-│   ├── UnsafeDeserialization.ql          # remote source -> sink (path)
-│   ├── UnsafeDeserializationType.ql      # remote -> polymorphic type descriptor (path)
-│   ├── UnsafeDeserializationRmi.ql       # RMI: bind a remote object with a complex method (path)
-│   ├── UnsafeSpringExporter.ql          # Spring remoting @Bean exporter that deserializes (problem)
-│   ├── DubboDeserialization.ql           # Apache Dubbo Codec2 -> ObjectInput chain (path)
-│   ├── DeserializationSinkModel.qll      # generic sink model
-│   ├── DubboDeserializationModel.qll      # Dubbo source/sink + taint steps
-│   └── SpringExporterModel.qll
-├── java/gadgets/               # ysoserial-style gadget detection
-│   ├── GadgetEntryPoints.ql            # Serializable readObject/readResolve/readExternal (problem)
-│   ├── GadgetActionCalls.ql            # RCE primitives: exec/invoke/lookup/loadClass/eval/... (problem)
-│   ├── DeserializationGadgetChain.ql    # entry -> action call-graph reachability (problem)
-│   ├── GadgetDispatchChain.ql          # Serializable link method -> action (dispatch gadget) (problem)
-│   ├── NovelGadgetCandidates.ql        # entry/dispatch -> action, NOT in ysoserial catalog (problem)
-│   ├── KnownYsoserialGadgetClasses.ql  # class from the ysoserial catalog present in source (problem)
-│   └── GadgetModel.qll                 # entry/link/action/catalog model + reachability
-├── python/deserialization/      # Python sinks + chains (reuse codeql/python-all model)
-│   ├── DeserializationSinks.ql
-│   ├── UnsafeDeserialization.ql
-│   └── DeserializationSinkModel.qll
-├── java/suites/  python/suites/ # java-deserialization / java-gadgets / java-all / python-deserialization
-├── tests/                       # 13 vulnerable+safe fixtures with .expected files
-├── tools/hunt.py                # buildless hunting CLI -> ranked Markdown report
-├── examples/                    # runnable demo targets + run-debug scripts + ysoserial hunt report
-├── docs/                        # hunting-guide, deep-debug, references, extending
-├── codeql-workspace.yml
-└── .github/workflows/           # check-queries (compile+test), publish (GHCR)
+java/deserialization/   sink + chain queries + models  (6 .ql, reuse codeql/java-all)
+java/gadgets/            ysoserial-style gadget queries + model (6 .ql + HuntReachabilityModel.qll)
+java/suites/             java-deserialization.qls / java-gadgets.qls / java-all.qls
+python/deserialization/  sink + chain queries (2 .ql)
+python/suites/            python-deserialization.qls
+tests/                   13 vulnerable+safe fixtures with committed .expected
+tools/hunt.py            buildless source-tree hunting CLI → ranked report
+tools/find-gadget-deser.py  JAR + start-class scoped gadget finder (CFR + buildless)
+examples/                runnable demo targets, run-debug scripts, sample hunt reports
+docs/                    hunting-guide · deep-debug · references · extending
+codeql-workspace.yml     registers the 4 local packs
+.github/workflows/       check-queries (compile+test, green) · publish (GHCR on tag)
 ```
 
-## Queries
-
-### Java — sinks & chains (CWE-502, reuse `codeql/java-all`)
-| Query | `@id` | Kind | What it finds |
-|---|---|---|---|
-| Deserialization sink | `java/deserialization/sink` | problem | every deserialization sink call (gadget triage) |
-| Unsafe deserialization chain | `java/deserialization/unsafe-chain` | path | remote/user source -> deserialization sink |
-| Unsafe polymorphic type | `java/deserialization/unsafe-type` | path | remote -> polymorphic type descriptor (Jackson/Jodd/Gson) |
-| Unsafe RMI deserialization | `java/deserialization/rmi` | path | RMI bind of a remote object with a complex-typed method |
-| Spring remote exporter | `java/deserialization/spring-exporter` | problem | Spring remoting @Bean exporter that deserializes request bodies |
-| Apache Dubbo chain | `java/deserialization/dubbo-chain` | path | Dubbo `Codec2.decodeBody` -> `ObjectInput.readXXX` (CVE-2020-11995 style) |
-
-Generic sinks: `ObjectInputStream.readObject/readUnshared`, `XMLDecoder`,
-XStream, Kryo, SnakeYAML, Jackson polymorphic, Hessian/Burlap, Jodd, Gson,
-Fastjson, JsonIo, Jabsorb, `ObjectMessage.getObject()` — all from the official
-`UnsafeDeserializationSink` model; recognized-safe variants (ValidatingObjectInputStream,
-SerialKiller, XStream/Kryo whitelist, SnakeYAML `SafeConstructor`, Jackson type
-validator) are excluded.
-
-### Java — ysoserial-style gadgets (CWE-502, modelled on `frohoff/ysoserial`)
-| Query | `@id` | Kind | What it finds |
-|---|---|---|---|
-| Gadget entry point | `java/deserialization/gadget-entry` | problem | `Serializable` `readObject`/`readResolve`/`readExternal`/`readObjectNoData` (chain start) |
-| Gadget action call | `java/deserialization/gadget-action` | problem | RCE primitives (`Runtime.exec`, `Method.invoke`, `Class.forName`, `ClassLoader.loadClass`, `ScriptEngine.eval`, JNDI `lookup`, `Templates.newTransformer`, `URL.openConnection`, ...) |
-| Gadget chain (entry -> action) | `java/deserialization/gadget-chain` | problem | a serializable callback transitively reaching an RCE action via the call graph |
-| Gadget dispatch | `java/deserialization/gadget-dispatch` | problem | a serializable "link" method (`InvocationHandler.invoke`, `Comparator.compare`, `Map.get/put`, `equals/hashCode/toString`) reaching an action — the ysoserial "middle" gadgets |
-| Novel gadget candidate | `java/deserialization/novel-gadget` | problem | entry/dispatch -> action, **excluding** the known ysoserial catalog — candidate NEW gadgets to investigate |
-| Known ysoserial gadget class | `java/deserialization/known-gadget-class` | problem | a source class matching the ysoserial catalog (`InvokerTransformer`, `TemplatesImpl`, `BeanComparator`, `MethodClosure`, `JtaTransactionManager`, ...) |
-
-### Python (CWE-502, reuse `codeql/python-all`)
-| Query | `@id` | Kind | What it finds |
-|---|---|---|---|
-| Deserialization sink | `python/deserialization/sink` | problem | every insecure decoding (pickle/cPickle/marshal/yaml/shelve/dill/jsonpickle/pandas.read_pickle) |
-| Unsafe deserialization chain | `python/deserialization/unsafe-chain` | path | remote/user source -> insecure decoding sink |
-
-## Quickstart (manual, without hunt.py)
+## Validation
 
 ```bash
-codeql database create my-java-db --language=java --source-root=src --build-mode=none
+codeql test run tests/java tests/python            # 13/13 unit tests
+bash examples/run-debug.sh                          # build real DBs, parity vs official query
+```
+
+- **13 unit tests** (11 Java + 2 Python): vulnerable fixtures flagged, safe variants not.
+- **Deep-debug** ([`docs/deep-debug.md`](./docs/deep-debug.md)): Java 8 sinks across 8
+  frameworks + 6 safe variants excluded; **parity** with GitHub's official
+  `java/unsafe-deserialization` (same 8 results); Python 10 sinks + safe YAML excluded;
+  gadget queries produce **0 false positives** on generic code.
+- **Real run on `frohoff/ysoserial`** ([`examples/ysoserial-hunt-report.md`](./examples/ysoserial-hunt-report.md)):
+  finds the `readObject → exec` gadget chain and 45 RCE action calls.
+- **Scoped JAR run** ([`examples/find-gadget-deser-complex-report.md`](./examples/find-gadget-deser-complex-report.md)):
+  from a Spring-style main class, finds 7 reachable dangerous sinks and correctly
+  excludes an unreachable admin-backdoor JNDI sink.
+
+## Manual usage (without the CLIs)
+
+```bash
+codeql database create my-java-db --language=java   --source-root=src --build-mode=none
 codeql database create my-py-db   --language=python --source-root=.
 
-codeql database analyze my-java-db java/suites/java-all.qls --search-path=java --format=sarif-latest --output=java.sarif
+codeql database analyze my-java-db java/suites/java-all.qls          --search-path=java   --format=sarif-latest --output=java.sarif
 codeql database analyze my-py-db   python/suites/python-deserialization.qls --search-path=python --format=sarif-latest --output=py.sarif
 ```
 
-## Using as a custom query suite in GitHub Advanced Security
+## GitHub Advanced Security (code scanning)
 
 ```yaml
 # .github/codeql/codeql-config.yml
@@ -172,41 +199,35 @@ packs:
   - source: "hypnguyen1209/python-deserialization"
 ```
 
-## Tests & validation
-
-```bash
-codeql test run tests/java tests/python      # 13/13 pass
-bash examples/run-debug.sh                    # examples/run-debug.ps1 on Windows — builds real DBs, parity vs official
-```
-
-- **13 unit tests** (11 Java + 2 Python) with vulnerable + safe fixtures and
-  committed `.expected` files.
-- **Deep-debug on real DBs** ([`docs/deep-debug.md`](./docs/deep-debug.md)):
-  Java 8 sinks across 8 frameworks + 6 recognized-safe variants; parity with
-  official `java/unsafe-deserialization` (same 8 results); Python 10 sinks +
-  safe YAML excluded; gadget queries give 0 false positives on generic code.
-- **Real run on `frohoff/ysoserial`** ([`examples/ysoserial-hunt-report.md`](./examples/ysoserial-hunt-report.md)):
-  finds the `readObject -> exec` gadget chain and the real RCE actions.
-
 ## Extending
 
-- Add a sink for a custom framework: model source/sink + extra taint steps —
-  see `DubboDeserializationModel.qll` and [`docs/extending.md`](./docs/extending.md).
-- Add a known gadget class: append to `isKnownYsoserialGadgetClass` in
+- **New sink for a custom framework**: model source/sink + extra taint steps —
+  see `java/deserialization/DubboDeserializationModel.qll` and
+  [`docs/extending.md`](./docs/extending.md).
+- **New known gadget class**: append to `isKnownYsoserialGadgetClass` in
   `java/gadgets/GadgetModel.qll`.
-- Regenerate expectations with `codeql test run --learn <dir>` (review by hand).
+- **Regenerate expectations**: `codeql test run --learn tests/java` (review the diff).
 
-## Acknowledgements & references
+## Publishing packs to GHCR
 
-See [`docs/references.md`](./docs/references.md). In particular: generic
-Java/Python models reuse GitHub's `codeql/java-all` + `codeql/python-all`
-(Apache-2.0); the Dubbo chain adapts `pwntester/codeql_grehack_workshop` (MIT);
-the RMI query adapts GitHub's experimental `java/unsafe-deserialization-rmi`;
-the Spring exporter adapts `GitHubSecurityLab/CodeQL-Community-Packs` (MIT); the
-gadget model/catalog are derived from `frohoff/ysoserial` (MIT).
+Tag a release (`vX.Y.Z`) and push the tag; `.github/workflows/publish.yml` publishes
+both packs to `ghcr.io/hypnguyen1209/*` (needs `packages: write`, default `GITHUB_TOKEN` suffices):
+
+```bash
+git tag v0.0.7 && git push origin v0.0.7
+```
+
+## Acknowledgements
+
+See [`docs/references.md`](./docs/references.md). In short — generic Java/Python models
+reuse GitHub's `codeql/java-all` + `codeql/python-all` (Apache-2.0); the Dubbo chain
+adapts `pwntester/codeql_grehack_workshop` (MIT); the RMI query adapts GitHub's
+experimental `java/unsafe-deserialization-rmi` (Apache-2.0); the Spring exporter adapts
+`GitHubSecurityLab/CodeQL-Community-Packs` (MIT); the gadget model/catalog are derived
+from `frohoff/ysoserial` (MIT).
 
 ## License
 
 MIT — see [LICENSE](./LICENSE). The library packs it depends on
-(`codeql/java-all`, `codeql/python-all`) are licensed by GitHub under their own
-terms (https://github.com/github/codeql).
+(`codeql/java-all`, `codeql/python-all`) are licensed by GitHub under their own terms
+(https://github.com/github/codeql).
