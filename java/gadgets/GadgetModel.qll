@@ -1,20 +1,10 @@
 /**
  * ysoserial-style deserialization gadget model (CWE-502).
  *
- * ysoserial (https://github.com/frohoff/ysoserial) weaponises Java native
- * deserialization by chaining a *gadget entry point* (a `Serializable` type's
- * `readObject`/`readResolve`/`readExternal` callback, or a method invoked
- * through a proxy/comparator/map such as `InvocationHandler.invoke`) to an
- * *action* (RCE primitive: `Runtime.exec`, `ProcessBuilder.start`,
- * `Method.invoke`, `Class.forName`+`newInstance`, `ClassLoader.loadClass`,
- * `ScriptEngine.eval`, JNDI `lookup`, `Templates.newTransformer`, ...).
- *
- * This file defines those concepts plus the call-graph reachability that ties
- * entry/link to action, and the ysoserial known-gadget catalog. The gadget
- * hunting queries consume them.
- *
- * All entry/link/catalog predicates are restricted to target *source* code
- * (`.fromSource()`) so JDK/library internals are not reported.
+ * Concepts + call-graph reachability + ysoserial known-gadget catalog, plus
+ * framework-dispatch edges (HashMap/TreeMap/proxy calling hashCode/equals/
+ * compare on deserialized values). All entry/link/catalog predicates are
+ * restricted to target source (`.fromSource()`).
  */
 
 import java
@@ -25,68 +15,76 @@ predicate isSerializableType(RefType t) {
 }
 
 /**
- * A call to an RCE/sensitive primitive that a deserialization gadget may
- * eventually trigger. This is the "action" end of a ysoserial chain.
+ * A call to an RCE/sensitive primitive (the "action" end of a ysoserial chain):
+ * Runtime.exec, ProcessBuilder.start, reflection (Method/Constructor/Class),
+ * ClassLoader.loadClass, scripting (ScriptEngine/JShell/Groovy/MVEL),
+ * JNDI (InitialContext.lookup/bind/rebind, JMX MBeanServer.invoke), XSLT
+ * (Templates/TransformerFactory), expression languages (OGNL/SpEL),
+ * templating (Velocity/Freemarker), URL.openConnection, URLClassLoader.
  */
 class GadgetActionCall extends MethodCall {
   GadgetActionCall() {
     exists(Method m | m = this.getMethod() |
-      // Runtime.exec
       m.getDeclaringType().hasQualifiedName("java.lang", "Runtime") and m.hasName("exec")
       or
-      // ProcessBuilder.start
       m.getDeclaringType().hasQualifiedName("java.lang", "ProcessBuilder") and m.hasName("start")
       or
-      // Reflection: Method.invoke
-      m.getDeclaringType().getASupertype*().hasQualifiedName("java.lang.reflect", "Method") and
-      m.hasName("invoke")
+      m.getDeclaringType().getASupertype*().hasQualifiedName("java.lang.reflect", "Method") and m.hasName("invoke")
       or
-      // Reflection: Class.forName / Class.newInstance
-      m.getDeclaringType().getASupertype*().hasQualifiedName("java.lang", "Class") and
-      m.hasName(["forName", "newInstance"])
+      m.getDeclaringType().getASupertype*().hasQualifiedName("java.lang", "Class") and m.hasName(["forName", "newInstance"])
       or
-      // Reflection: Constructor.newInstance
-      m.getDeclaringType().getASupertype*().hasQualifiedName("java.lang.reflect", "Constructor") and
-      m.hasName("newInstance")
+      m.getDeclaringType().getASupertype*().hasQualifiedName("java.lang.reflect", "Constructor") and m.hasName("newInstance")
       or
-      // ClassLoader.loadClass
-      m.getDeclaringType().getASupertype*().hasQualifiedName("java.lang", "ClassLoader") and
-      m.hasName("loadClass")
+      m.getDeclaringType().getASupertype*().hasQualifiedName("java.lang", "ClassLoader") and m.hasName("loadClass")
       or
-      // Scripting: ScriptEngine.eval
-      m.getDeclaringType().getASupertype*().hasQualifiedName("javax.script", "ScriptEngine") and
-      m.hasName("eval")
+      m.getDeclaringType().getASupertype*().hasQualifiedName("javax.script", "ScriptEngine") and m.hasName("eval")
       or
-      // JNDI: InitialContext.lookup/bind/rebind
-      m.getDeclaringType().getASupertype*().hasQualifiedName("javax.naming", "InitialContext") and
-      m.hasName(["lookup", "bind", "rebind"])
+      m.getDeclaringType().getASupertype*().hasQualifiedName("javax.naming", "InitialContext") and m.hasName(["lookup", "bind", "rebind"])
       or
-      // XSLT: Templates.newTransformer (covers com.sun...xsltc.trax.TemplatesImpl)
-      m.hasName("newTransformer") and
-      m.getDeclaringType().getASupertype*().hasQualifiedName("javax.xml.transform", "Templates")
+      m.hasName("newTransformer") and m.getDeclaringType().getASupertype*().hasQualifiedName("javax.xml.transform", "Templates")
       or
-      // XSLT: TransformerFactory.newTransformer
-      m.getDeclaringType().hasQualifiedName("javax.xml.transform", "TransformerFactory") and
-      m.hasName("newTransformer")
+      m.getDeclaringType().hasQualifiedName("javax.xml.transform", "TransformerFactory") and m.hasName("newTransformer")
       or
-      // URL.openConnection (SSRF / remote class-load setup)
       m.getDeclaringType().hasQualifiedName("java.net", "URL") and m.hasName("openConnection")
       or
-      // URLClassLoader.newInstance / loadClass
-      m.getDeclaringType().hasQualifiedName("java.net", "URLClassLoader") and
-      m.hasName(["newInstance", "loadClass"])
+      m.getDeclaringType().hasQualifiedName("java.net", "URLClassLoader") and m.hasName(["newInstance", "loadClass"])
+      or
+      // JMX
+      m.getDeclaringType().getASupertype*().hasQualifiedName("javax.management", "MBeanServer") and m.hasName("invoke")
+      or
+      // Groovy
+      (
+        m.getDeclaringType().getASupertype*().hasQualifiedName("groovy.lang", "GroovyShell") or
+        m.getDeclaringType().getASupertype*().hasQualifiedName("groovy.lang", "GroovyClassLoader")
+      ) and m.hasName(["evaluate", "parseClass"])
+      or
+      // JShell
+      m.getDeclaringType().getASupertype*().hasQualifiedName("jdk.jshell", "JShell") and m.hasName("eval")
+      or
+      // OGNL
+      m.getDeclaringType().getASupertype*().hasQualifiedName("ognl", ["OgnlUtil", "Ognl"]) and m.hasName(["getValue", "parseExpression"])
+      or
+      // MVEL
+      m.getDeclaringType().getASupertype*().hasQualifiedName("org.mvel2", "MVEL") and m.hasName(["eval", "executeExpression"])
+      or
+      // Spring SpEL
+      m.getDeclaringType().getASupertype*().hasQualifiedName("org.springframework.expression", ["ExpressionParser", "Expression"]) and
+        m.hasName(["parseExpression", "getValue"])
+      or
+      // Velocity / Freemarker
+      m.getDeclaringType().getASupertype*().hasQualifiedName("org.apache.velocity.app", "Velocity") and m.hasName("evaluate")
+      or
+      m.getDeclaringType().getASupertype*().hasQualifiedName("freemarker.template", "Template") and m.hasName("process")
     )
   }
 
-  /** Name of the action primitive, e.g. "exec", "invoke", "lookup". */
   string getActionName() { result = this.getMethod().getName() }
 
-  /** Severity band for the action primitive, used to rank hunting results. */
   string getActionSeverity() {
-    if this.getActionName() = ["exec", "start", "lookup", "eval", "loadClass"]
+    if this.getActionName() = ["exec", "start", "lookup", "eval", "loadClass", "getValue", "executeExpression", "process"]
     then result = "critical"
     else (
-      if this.getActionName() = ["invoke", "newInstance", "forName", "newTransformer", "openConnection"]
+      if this.getActionName() = ["invoke", "newInstance", "forName", "newTransformer", "openConnection", "parseClass", "parseExpression"]
       then result = "high"
       else result = "medium"
     )
@@ -98,135 +96,101 @@ private predicate isDeserializationCallback(Method method) {
   method.fromSource() and
   isSerializableType(method.getDeclaringType()) and
   (
-    // private void readObject(ObjectInputStream)
     method.hasName("readObject") and method.getNumberOfParameters() = 1 and
-    method.getParameter(0).getType().(RefType).getASupertype*()
-      .hasQualifiedName("java.io", "ObjectInputStream")
+    method.getParameter(0).getType().(RefType).getASupertype*().hasQualifiedName("java.io", "ObjectInputStream")
     or
-    // void readObjectNoData()
     method.hasName("readObjectNoData") and method.getNumberOfParameters() = 0
     or
-    // Object readResolve()
     method.hasName("readResolve") and method.getNumberOfParameters() = 0
     or
-    // void readExternal(ObjectInput)
     method.hasName("readExternal") and method.getNumberOfParameters() = 1 and
     method.getParameter(0).getType().(RefType).getASupertype*().hasQualifiedName("java.io", "ObjectInput")
   )
 }
 
-/**
- * A deserialization gadget *entry point*: a `Serializable`/`Externalizable`
- * type's `readObject`/`readResolve`/`readExternal`/`readObjectNoData` callback.
- * Invoked by `ObjectInputStream.readObject()` on attacker-controlled data.
- */
+/** A deserialization gadget *entry point* (Serializable readObject/readResolve/readExternal/readObjectNoData). */
 class GadgetEntryPoint extends Method {
   GadgetEntryPoint() { isDeserializationCallback(this) }
 }
 
-/**
- * A *gadget link* method: an intermediate method ysoserial chains through —
- * `InvocationHandler.invoke`, `Comparator.compare`/`Comparable.compareTo`,
- * `Map.get/put/entrySet/containsKey`, and `Object.equals/hashCode/toString`
- * on serializable types. The deserialization machinery can trigger these
- * (proxy `equals`/`hashCode`, `HashMap`/`TreeMap` insertion, etc.).
- */
+/** A *gadget link* method: InvocationHandler.invoke, Comparator.compare/Comparable.compareTo,
+ *  Map.get/put/entrySet/containsKey, and Object.equals/hashCode/toString on serializable types. */
 class GadgetLinkMethod extends Method {
   GadgetLinkMethod() {
     this.fromSource() and
     (
-      this.hasName("invoke") and
-      this.getDeclaringType().getASupertype*().getSourceDeclaration().hasQualifiedName("java.lang.reflect", "InvocationHandler")
+      this.hasName("invoke") and this.getDeclaringType().getASupertype*().getSourceDeclaration().hasQualifiedName("java.lang.reflect", "InvocationHandler")
       or
       this.hasName(["compare", "compareTo"]) and
       (
-        this.getDeclaringType().getASupertype*().getSourceDeclaration().hasQualifiedName("java.util", "Comparator")
-        or
+        this.getDeclaringType().getASupertype*().getSourceDeclaration().hasQualifiedName("java.util", "Comparator") or
         this.getDeclaringType().getASupertype*().getSourceDeclaration().hasQualifiedName("java.lang", "Comparable")
       )
       or
-      this.hasName(["get", "put", "entrySet", "containsKey"]) and
-      this.getDeclaringType().getASupertype*().getSourceDeclaration().hasQualifiedName("java.util", "Map")
+      this.hasName(["get", "put", "entrySet", "containsKey"]) and this.getDeclaringType().getASupertype*().getSourceDeclaration().hasQualifiedName("java.util", "Map")
       or
       this.hasName(["equals", "hashCode", "toString"]) and isSerializableType(this.getDeclaringType())
     )
   }
 }
 
-/** Holds if gadget entry `entry` (transitively) reaches action call `action`. */
+/**
+ * Framework-dispatch edge (#4): `from` calls a method whose name matches a known
+ * gadget-link dispatch verb (hashCode/equals/compare/get/put/entrySet/invoke) on
+ * some receiver, and `to` is a serializable gadget link with that name. This models
+ * HashMap/TreeMap readObject -> key.hashCode()/compare(), proxy -> InvocationHandler.invoke,
+ * etc., where static call resolution can't bind the receiver. Over-approximate by design.
+ */
+predicate dispatchEdge(Method src, GadgetLinkMethod dst) {
+  exists(MethodCall mc |
+    mc.getCaller() = src and
+    mc.getMethod().hasName(dst.getName())
+  )
+}
+
+/** Holds if gadget entry `entry` reaches action `action` (calls* + dispatch edges). */
 predicate gadgetReachableAction(GadgetEntryPoint entry, GadgetActionCall action) {
   entry.calls*(action.getCaller())
+  or
+  exists(GadgetLinkMethod link | dispatchEdge+(entry, link) and link.calls*(action.getCaller()))
 }
 
-/** Holds if gadget dispatch `link` (transitively) reaches action call `action`.
- *  These are the "dispatch" gadgets (e.g. `InvokerTransformer.transform`). */
+/** Holds if gadget dispatch `link` reaches action `action` (calls* + dispatch edges). */
 predicate gadgetLinkReachesAction(GadgetLinkMethod link, GadgetActionCall action) {
   link.calls*(action.getCaller())
+  or
+  exists(GadgetLinkMethod l2 | dispatchEdge+(link, l2) and l2.calls*(action.getCaller()))
 }
 
-/**
- * Holds if `t` is one of the well-known ysoserial gadget source classes
- * (https://github.com/frohoff/ysoserial). Shared by the known-class query and
- * the novel-gadget query (which excludes these).
- */
+/** Holds if `t` is one of the well-known ysoserial gadget source classes. */
 predicate isKnownYsoserialGadgetClass(RefType t) {
   t.fromSource() and
   (
-    t.hasQualifiedName("org.apache.commons.collections.functors", [
-      "InvokerTransformer", "ChainedTransformer", "ConstantTransformer",
-      "InstantiateTransformer", "TransformedMap"
-    ])
-    or
-    t.hasQualifiedName("org.apache.commons.collections.keyvalue", "TiedMapEntry")
-    or
-    t.hasQualifiedName("org.apache.commons.collections.map", ["LazyMap", "DefaultedMap"])
-    or
-    t.hasQualifiedName("org.apache.commons.collections4.functors", [
-      "InvokerTransformer", "ChainedTransformer", "ConstantTransformer", "InstantiateTransformer"
-    ])
-    or
-    t.hasQualifiedName("org.apache.commons.collections4.keyvalue", "TiedMapEntry")
-    or
-    t.hasQualifiedName("org.apache.commons.collections4.map", ["LazyMap", "DefaultedMap"])
-    or
-    t.hasQualifiedName("org.apache.commons.beanutils", ["BeanComparator", "PropertyUtilsBean"])
-    or
-    t.hasQualifiedName("com.sun.org.apache.xalan.internal.xsltc.trax", "TemplatesImpl")
-    or
-    t.hasQualifiedName("com.sun.org.apache.xalan.internal.xsltc.runtime", "AbstractTranslet")
-    or
-    t.hasQualifiedName("com.sun.org.apache.bcel.internal.util", "ClassLoader")
-    or
-    t.hasQualifiedName("javassist.util.proxy", ["ProxyFactory", "ProxyObject", "RuntimeSupport"])
-    or
-    t.hasQualifiedName("org.codehaus.groovy.runtime", [
-      "ConvertedClosure", "MethodClosure", "ConversionHandler"
-    ])
-    or
-    t.hasQualifiedName("org.springframework.beans.factory.config", "PropertyPathFactoryBean")
-    or
-    t.hasQualifiedName("org.springframework.transaction.jta", "JtaTransactionManager")
-    or
-    t.hasQualifiedName("org.springframework.aop.support", "AbstractBeanFactoryPointcutAdvisor")
-    or
-    t.hasQualifiedName("org.springframework.jndi", "JndiObjectFactoryBean")
-    or
-    t.hasQualifiedName("com.mchange.v2.c3p0", "WrapperConnectionPoolDataSource")
-    or
-    t.hasQualifiedName("org.hibernate.property", "BasicPropertyAccessor")
-    or
-    t.hasQualifiedName("org.apache.commons.fileupload.disk", "DiskFileItem")
-    or
-    t.hasQualifiedName("org.mozilla.javascript", ["NativeJavaObject", "FunctionObject", "MemberBox"])
-    or
-    t.hasQualifiedName("com.alibaba.fastjson", ["JSONArray", "JSONObject"])
-    or
-    t.hasQualifiedName("org.apache.myfaces.view.facelets.el", "ValueExpressionMethodExpression")
-    or
-    t.hasQualifiedName("org.apache.naming.resources", "ResourceRef")
-    or
-    t.hasQualifiedName("org.apache.commons.configuration", "ConfigurationMap")
-    or
-    t.hasQualifiedName("org.apache.wicket.util.link", "Link")
+    t.hasQualifiedName("org.apache.commons.collections.functors", ["InvokerTransformer", "ChainedTransformer", "ConstantTransformer", "InstantiateTransformer", "TransformedMap"])
+    or t.hasQualifiedName("org.apache.commons.collections.keyvalue", "TiedMapEntry")
+    or t.hasQualifiedName("org.apache.commons.collections.map", ["LazyMap", "DefaultedMap"])
+    or t.hasQualifiedName("org.apache.commons.collections4.functors", ["InvokerTransformer", "ChainedTransformer", "ConstantTransformer", "InstantiateTransformer"])
+    or t.hasQualifiedName("org.apache.commons.collections4.keyvalue", "TiedMapEntry")
+    or t.hasQualifiedName("org.apache.commons.collections4.map", ["LazyMap", "DefaultedMap"])
+    or t.hasQualifiedName("org.apache.commons.beanutils", ["BeanComparator", "PropertyUtilsBean"])
+    or t.hasQualifiedName("com.sun.org.apache.xalan.internal.xsltc.trax", "TemplatesImpl")
+    or t.hasQualifiedName("com.sun.org.apache.xalan.internal.xsltc.runtime", "AbstractTranslet")
+    or t.hasQualifiedName("com.sun.org.apache.bcel.internal.util", "ClassLoader")
+    or t.hasQualifiedName("javassist.util.proxy", ["ProxyFactory", "ProxyObject", "RuntimeSupport"])
+    or t.hasQualifiedName("org.codehaus.groovy.runtime", ["ConvertedClosure", "MethodClosure", "ConversionHandler"])
+    or t.hasQualifiedName("org.springframework.beans.factory.config", "PropertyPathFactoryBean")
+    or t.hasQualifiedName("org.springframework.transaction.jta", "JtaTransactionManager")
+    or t.hasQualifiedName("org.springframework.aop.support", "AbstractBeanFactoryPointcutAdvisor")
+    or t.hasQualifiedName("org.springframework.jndi", "JndiObjectFactoryBean")
+    or t.hasQualifiedName("com.mchange.v2.c3p0", "WrapperConnectionPoolDataSource")
+    or t.hasQualifiedName("org.hibernate.property", "BasicPropertyAccessor")
+    or t.hasQualifiedName("org.apache.commons.fileupload.disk", "DiskFileItem")
+    or t.hasQualifiedName("org.mozilla.javascript", ["NativeJavaObject", "FunctionObject", "MemberBox"])
+    or t.hasQualifiedName("com.alibaba.fastjson", ["JSONArray", "JSONObject"])
+    or t.hasQualifiedName("org.apache.myfaces.view.facelets.el", "ValueExpressionMethodExpression")
+    or t.hasQualifiedName("org.apache.naming.resources", "ResourceRef")
+    or t.hasQualifiedName("org.apache.commons.configuration", "ConfigurationMap")
+    or t.hasQualifiedName("org.apache.wicket.util.link", "Link")
+    or t.hasQualifiedName("org.codehaus.groovy.runtime", "ConvertedClosure")
   )
 }

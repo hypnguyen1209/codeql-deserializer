@@ -4,7 +4,8 @@ find-gadget-deser.py - scoped deserialization/gadget chain finder for a JAR.
 
 Given a compiled Java archive and an entry/start class, this tool:
   1. decompiles the jar to Java source (CFR),
-  2. builds a buildless CodeQL database (no Maven/Gradle/deps needed),
+  2. builds a buildless CodeQL database (no Maven/Gradle/deps needed; cached by
+     jar sha256 so re-runs are fast),
   3. runs a generated reachability query scoped to the start class that reports
      chains  start-method -> ... -> dangerous sink  where "dangerous" is either
      a deserialization sink (ObjectInputStream.readObject, XStream, Kryo,
@@ -15,6 +16,7 @@ Given a compiled Java archive and an entry/start class, this tool:
 Usage:
   python3 tools/find-gadget-deser.py --jar app.jar --start-class MainWebSpring
   python3 tools/find-gadget-deser.py --jar app.jar --start-class com.example.MainWebSpring --full
+  python3 tools/find-gadget-deser.py --jar app.jar --start-class Main --threads 4 --sarif out.sarif --keep-decompiled
 
 Requires:
   - CodeQL CLI on PATH; local packs installed: codeql pack install java/qlpack.yml
@@ -22,6 +24,7 @@ Requires:
   - internet on first run to fetch the CFR decompiler into tools/.cache (or pass --cfr)
 """
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -38,15 +41,11 @@ SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "deserialization":
 
 
 def find_java():
-    for c in ("java",):
-        p = os.environ.get("JAVA_HOME")
-        if p and os.path.exists(os.path.join(p, "bin", "java")):
-            return os.path.join(p, "bin", "java")
-        from shutil import which
-        j = which("java")
-        if j:
-            return j
-    return None
+    p = os.environ.get("JAVA_HOME")
+    if p and os.path.exists(os.path.join(p, "bin", "java")):
+        return os.path.join(p, "bin", "java")
+    from shutil import which
+    return which("java")
 
 
 def get_cfr(override):
@@ -75,11 +74,14 @@ def decompile(java, cfr, jar, outdir):
     return True
 
 
-def build_db(codeql, src, db):
+def build_db(codeql, src, db, threads=None):
     if os.path.isdir(db) and os.path.exists(os.path.join(db, "codeql-database.yml")):
-        print(f"[find-gadget-deser] reusing DB {db}", file=sys.stderr); return True
+        print(f"[find-gadget-deser] reusing cached DB {db}", file=sys.stderr)
+        return True
     cmd = [codeql, "database", "create", db, "--language=java",
            "--source-root=" + src, "--build-mode=none", "--overwrite"]
+    if threads:
+        cmd += ["--threads=" + str(threads)]
     r = subprocess.run(cmd)
     if r.returncode != 0:
         print("[find-gadget-deser] ERROR: database create failed.", file=sys.stderr)
@@ -98,11 +100,11 @@ def gen_query(start_class):
     return re.sub(r"/\*HUNT_START\*/.*?/\*HUNT_END\*/", "/*HUNT_START*/ " + cond + " /*HUNT_END*/", tpl, count=1, flags=re.S)
 
 
-def analyze(codeql, db, ql, sarif, extra_search=None):
+def analyze(codeql, db, ql, sarif, threads=None):
     cmd = [codeql, "database", "analyze", db, ql,
            "--format=sarif-latest", "--output=" + sarif, "--search-path=" + SEARCH]
-    if extra_search:
-        cmd += ["--search-path=" + extra_search]
+    if threads:
+        cmd += ["--threads=" + str(threads)]
     return subprocess.run(cmd).returncode == 0
 
 
@@ -115,16 +117,17 @@ def parse_kind(msg):
     return "info"
 
 
-def report(sarif, out_md, jar, start_class, full_sarif=None):
-    def load_results(path):
-        if not path or not os.path.exists(path):
-            return []
-        d = json.load(open(path, "r", encoding="utf-8"))
-        return (d.get("runs") or [{}])[0].get("results", [])
+def load_results(path):
+    if not path or not os.path.exists(path):
+        return []
+    d = json.load(open(path, "r", encoding="utf-8"))
+    return (d.get("runs") or [{}])[0].get("results", [])
 
+
+def report(sarif, out_md, jar, start_class, full_sarif=None):
     results = load_results(sarif)
-    lines = [f"# find-gadget-deser report",
-             f"_jar: {jar} | start-class: {start_class}_\n"]
+    lines = ["# find-gadget-deser report",
+             f"_jar: {os.path.basename(jar)} | start-class: {start_class}_\n"]
     lines.append(f"## Reachable from `{start_class}` ({len(results)})\n")
     if not results:
         lines.append("**No dangerous sinks reachable from the start class.**\n")
@@ -178,18 +181,24 @@ def main():
     ap.add_argument("--cfr", default=None, help="path to cfr.jar (default: auto-download to tools/.cache)")
     ap.add_argument("--codeql", default="codeql", help="path to codeql CLI")
     ap.add_argument("--out", default=None, help="report markdown path")
+    ap.add_argument("--threads", type=int, default=None, help="CodeQL --threads=N")
+    ap.add_argument("--sarif", default=None, help="also keep the SARIF at this path")
+    ap.add_argument("--keep-decompiled", action="store_true", help="keep the decompiled source dir")
+    ap.add_argument("--cache-db", default=None, help="reuse a DB dir cached by jar hash (default: tempdir)")
     args = ap.parse_args()
 
     java = find_java()
     if not java:
         print("[find-gadget-deser] ERROR: no java runtime found (set JAVA_HOME).", file=sys.stderr); sys.exit(1)
     cfr = get_cfr(args.cfr)
+    jar_hash = hashlib.sha256(open(args.jar, "rb").read()).hexdigest()[:16]
+    db = args.cache_db or os.path.join(tempfile.gettempdir(), "fgd-db-" + jar_hash)
     work = tempfile.mkdtemp(prefix="find-gadget-deser-")
-    src = os.path.join(work, "src"); db = os.path.join(work, "db")
-    print(f"[find-gadget-deser] jar={args.jar} start-class={args.start_class}", file=sys.stderr)
+    src = os.path.join(work, "src")
+    print(f"[find-gadget-deser] jar={args.jar} start-class={args.start_class} (db cache: {db})", file=sys.stderr)
     if not decompile(java, cfr, args.jar, src):
         sys.exit(1)
-    if not build_db(args.codeql, src, db):
+    if not build_db(args.codeql, src, db, args.threads):
         sys.exit(1)
 
     gendir = os.path.join(REPO, "java", "_generated")
@@ -199,18 +208,23 @@ def main():
     print(f"[find-gadget-deser] generated scoped query -> {ql} (gitignored)", file=sys.stderr)
     print(f"[find-gadget-deser] running scoped reachability query", file=sys.stderr)
     sarif = os.path.join(work, "reachable.sarif")
-    if not analyze(args.codeql, db, ql, sarif):
+    if not analyze(args.codeql, db, ql, sarif, args.threads):
         sys.exit(1)
+    if args.sarif:
+        shutil.copy(sarif, args.sarif)
+        print(f"[find-gadget-deser] SARIF kept at {args.sarif}", file=sys.stderr)
 
     full_sarif = None
     if args.full:
         suite = os.path.join(REPO, "java/suites/java-all.qls")
         full_sarif = os.path.join(work, "full.sarif")
         print(f"[find-gadget-deser] running full suite", file=sys.stderr)
-        analyze(args.codeql, db, suite, full_sarif)
+        analyze(args.codeql, db, suite, full_sarif, args.threads)
 
     out_md = args.out or os.path.join(os.getcwd(), "find-gadget-deser-report.md")
     report(sarif, out_md, args.jar, args.start_class, full_sarif)
+    if args.keep_decompiled:
+        print(f"[find-gadget-deser] decompiled source kept at {src}", file=sys.stderr)
 
 
 if __name__ == "__main__":

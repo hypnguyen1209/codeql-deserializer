@@ -24,6 +24,13 @@ codeql-cli-cache/
 .DS_Store
 Thumbs.db
 
+# Python bytecode caches
+__pycache__/
+*.pyc
+
+# Codex/Claude session transcripts occasionally dropped in the tree
+rollout-*.jsonl
+
 # Test / build outputs
 test-results/
 *.sarif
@@ -42,4 +49,9 @@ tools/.cache/
 
 # generated scoped hunt query
 java/_generated/
+
+
+# codeql test runner leftovers
+*.testproj/
+**/java.testproj/
 

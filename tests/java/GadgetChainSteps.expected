@@ -1,0 +1,2 @@
+| gadgettest/EvilGadget.java:12:18:12:27 | readObject | Gadget chain [RCE:exec]: EvilGadget.readObject -> exec() |
+| gadgettest/EvilMultiHop.java:12:18:12:27 | readObject | Gadget chain [RCE:exec]: EvilMultiHop.readObject -> helper -> exec() |

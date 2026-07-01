@@ -1,0 +1,1 @@
+package org.apache.commons.collections.functors; public class ChainedTransformer { private final InvokerTransformer[] chain; public ChainedTransformer(InvokerTransformer[] c){this.chain=c;} public Object transform(Object input) throws Exception { for(InvokerTransformer t: chain) input = t.transform(input); return input; } }

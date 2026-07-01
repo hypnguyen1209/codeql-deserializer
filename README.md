@@ -15,7 +15,7 @@ daily driver for deserialization research. Given Java or Python source (or a com
 `.jar`), it tells you **where untrusted data is deserialized** and **which gadget chains
 could weaponise it** — without you writing any CodeQL.
 
-- **14 queries** (12 Java + 2 Python), **13/13 tests pass**, CI-verified on Ubuntu.
+- **15 queries** (13 Java + 2 Python), **13/13 tests pass**, CI-verified on Ubuntu.
 - Reuses GitHub's official `codeql/java-all` + `codeql/python-all` models (no hand-rolled
   sink logic that drifts); adds framework-specific chains (Dubbo, RMI, Spring) and a
   ysoserial-style gadget model.
@@ -98,7 +98,14 @@ python3 tools/find-gadget-deser.py --jar app.jar --start-class com.example.MainW
 python tools/hunt.py path/to/py-src --lang python --mode full --out report.md
 ```
 
-Both tools print a ranked Markdown report (grouped by rule, sorted `[critical]` >
+
+
+### PoC skeleton + benchmark
+
+- `tools/gen-poc.py --sarif <find-gadget-deser.sarif> --index N -o PoC.java` — emits a minimal Java serialize->deserialize harness skeleton for a chosen chain hit (TODO markers for arming the payload; validation is yours).
+- `benchmark/bench.py` — recall/precision benchmark on known chains (commons-collections-style, commons-beanutils `BeanComparator`, + a safe control). Run: `python3 benchmark/bench.py` (needs `javac` on PATH).
+
+Both hunting tools print a ranked Markdown report (grouped by rule, sorted `[critical]` >
 `[high]` > `[medium]`) and write it to `--out`.
 
 ### 3 · Read the report
@@ -134,7 +141,8 @@ Jabsorb, `ObjectMessage.getObject()`. Recognized-safe variants are excluded:
 |---|---|---|
 | `java/deserialization/gadget-entry` | problem | `Serializable` `readObject`/`readResolve`/`readExternal`/`readObjectNoData` (chain start) |
 | `java/deserialization/gadget-action` | problem | RCE primitives: `Runtime.exec`, `Method.invoke`, `Class.forName`, `ClassLoader.loadClass`, `ScriptEngine.eval`, JNDI `lookup`, `Templates.newTransformer`, `URL.openConnection`, … |
-| `java/deserialization/gadget-chain` | problem | entry → action via the call graph |
+| java/deserialization/gadget-chain | problem | entry → action via the call graph |
+| java/deserialization/gadget-chain-steps | problem | same, but renders the intermediate call path  -> b -> ... -> exec (≤4 hops) |
 | `java/deserialization/gadget-dispatch` | problem | serializable "link" method (`InvocationHandler.invoke`, `Comparator.compare`, `Map.get/put`, `equals/hashCode/toString`) → action |
 | `java/deserialization/novel-gadget` | problem | entry/dispatch → action, **not** in the ysoserial catalog → candidate new gadget |
 | `java/deserialization/known-gadget-class` | problem | a class matching the ysoserial catalog (`InvokerTransformer`, `TemplatesImpl`, `BeanComparator`, `MethodClosure`, `JtaTransactionManager`, …) |

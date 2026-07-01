@@ -12,6 +12,7 @@ Usage:
   python tools/hunt.py <target-src> --lang python
   python tools/hunt.py <target-src> --command "mvn -B compile"   # real build
   python tools/hunt.py <target-src> --db /path/to/existing.db    # reuse a DB
+  python tools/hunt.py <target-src> --threads 4 --sarif out.sarif
 
 Requires the CodeQL CLI on PATH and the local packs installed:
   codeql pack install java/qlpack.yml python/qlpack.yml
@@ -19,6 +20,7 @@ Requires the CodeQL CLI on PATH and the local packs installed:
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -50,7 +52,7 @@ def build_db(codeql, lang, target, db, command):
     if command:
         cmd += ["--command=" + command]
     elif lang == "java":
-        cmd += ["--build-mode=none"]   # buildless: no Maven/Gradle/deps needed
+        cmd += ["--build-mode=none"]
     r = run(cmd)
     if r.returncode != 0:
         print(f"[hunt] ERROR: database create failed (code {r.returncode}).", file=sys.stderr)
@@ -62,9 +64,11 @@ def build_db(codeql, lang, target, db, command):
     return True
 
 
-def analyze(codeql, db, suite, search, sarif):
+def analyze(codeql, db, suite, search, sarif, threads=None):
     cmd = [codeql, "database", "analyze", db, suite,
            "--format=sarif-latest", "--output=" + sarif, "--search-path=" + search]
+    if threads:
+        cmd += ["--threads=" + str(threads)]
     r = run(cmd)
     return r.returncode == 0
 
@@ -131,6 +135,8 @@ def main():
     ap.add_argument("--command", default=None, help="build command (default: buildless for Java)")
     ap.add_argument("--codeql", default="codeql", help="path to codeql CLI")
     ap.add_argument("--out", default=None, help="report markdown path")
+    ap.add_argument("--threads", type=int, default=None, help="CodeQL --threads=N")
+    ap.add_argument("--sarif", default=None, help="also keep the SARIF at this path")
     args = ap.parse_args()
 
     suite = SUITES.get((args.lang, args.mode))
@@ -146,8 +152,11 @@ def main():
         sys.exit(1)
     sarif = os.path.join(tempfile.gettempdir(), "hunt.sarif")
     print(f"[hunt] running suite {suite}", file=sys.stderr)
-    if not analyze(args.codeql, db, suite_path, search, sarif):
+    if not analyze(args.codeql, db, suite_path, search, sarif, args.threads):
         sys.exit(1)
+    if args.sarif:
+        shutil.copy(sarif, args.sarif)
+        print(f"[hunt] SARIF kept at {args.sarif}", file=sys.stderr)
     out_md = args.out or os.path.join(os.getcwd(), "hunt-report.md")
     report(sarif, out_md, args.lang, args.mode, args.target)
 

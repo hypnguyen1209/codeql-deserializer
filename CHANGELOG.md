@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.0 — 2026-07-01
+- #1 GadgetChainSteps.ql: bounded (≤4 hops) non-recursive call-path rendering
+  (readObject -> helper -> exec) so chains are visible, not just endpoints.
+- #4 Framework-dispatch edges in GadgetModel (HashMap/TreeMap readObject ->
+  hashCode/compare, proxy -> InvocationHandler.invoke) via dispatchEdge+, widening
+  gadget reachability beyond the static call graph.
+- #5 Expanded action catalog: JMX MBeanServer.invoke, Groovy GroovyShell/GroovyClassLoader,
+  JShell, OGNL, MVEL, Spring SpEL, Velocity, Freemarker; + expanded known-gadget catalog.
+- #3 Tooling quick wins: --threads, --sarif output, DB cache by jar sha256,
+  --keep-decompiled in find-gadget-deser.py; --threads/--sarif in hunt.py.
+- #2 benchmark/: cc1 (commons-collections-style) + beanutils BeanComparator + safe
+  control, with bench.py measuring recall/precision. Currently recall 100%, precision 100%
+  (bench caught a real fixture bug: LazyMap must implement Map to be a recognized dispatch link).
+- #7 tools/gen-poc.py: from a find-gadget-deser SARIF hit, emit a minimal Java
+  serialize->deserialize PoC skeleton (TODO markers; validation is yours).
+- 14 unit tests pass; README updated (15 queries, new tools).
+
+
+
 ## 0.0.7 — 2026-07-01
 - 	ools/find-gadget-deser.py: scoped JAR gadget finder. --jar x.jar --start-class 
   Main -> decompiles with CFR (auto-cached), builds a buildless CodeQL DB, generates

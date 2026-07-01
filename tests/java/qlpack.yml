@@ -1,5 +1,5 @@
 name: hypnguyen1209/java-deserialization-tests
-version: 0.0.7
+version: 0.1.0
 description: "Tests for the Java deserialization query pack."
 license: MIT
 extractor: java
