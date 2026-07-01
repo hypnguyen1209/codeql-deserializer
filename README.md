@@ -17,6 +17,27 @@ ranked gadget report without Maven/Gradle/deps.
 
 ---
 
+## Prerequisites & external dependencies
+
+| Need | For | How |
+|---|---|---|
+| **CodeQL CLI** (≥ 2.20) | all queries/tools | https://github.com/github/codeql-cli-binaries/releases — `codeql` on PATH |
+| **Python 3** | `tools/hunt.py`, `tools/find-gadget-deser.py` | on PATH |
+| **Java 17+ runtime** (`java`) | `find-gadget-deser.py` (runs CFR), building Java DBs | on PATH or `JAVA_HOME` |
+| **CFR decompiler** | `find-gadget-deser.py` only | auto-downloaded to `tools/.cache/cfr.jar` on first run (or `--cfr path`) |
+| **internet (first run)** | `codeql pack install` + first CFR download | pulls `codeql/java-all`, `codeql/python-all` from GHCR and CFR from Maven Central |
+
+The **query packs** themselves depend only on GitHub's official library packs,
+declared in each `qlpack.yml`:
+- `hypnguyen1209/java-deserialization` → `codeql/java-all`
+- `hypnguyen1209/python-deserialization` → `codeql/python-all`
+
+These are fetched automatically by `codeql pack install java/qlpack.yml
+python/qlpack.yml` (or by the workspace `codeql-workspace.yml`). No other
+external projects or folders are required — everything else (tests, examples,
+tools) is self-contained in this repo. See
+[`docs/references.md`](./docs/references.md) for provenance/attribution of the
+adapted queries.
 ## Daily hunting (start here)
 
 ```bash

@@ -1,4 +1,4 @@
-# Hunt report - E:\project\_ref\ysoserial
+# Hunt report - frohoff/ysoserial (clone, --mode gadgets)
 _language: java | mode: gadgets | findings: 48_
 
 ## java/deserialization/gadget-action  (45)

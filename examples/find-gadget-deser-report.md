@@ -1,5 +1,5 @@
 # find-gadget-deser report
-_jar: E:\project\_scratch\testapp\app.jar | start-class: com.example.MainWebSpring_
+_jar: app.jar (self-built sample) | start-class: com.example.MainWebSpring_
 
 ## Reachable from `com.example.MainWebSpring` (2)
 
