@@ -1,8 +1,12 @@
 # Changelog
 
 ## 0.1.0 — 2026-07-01
-- #1 GadgetChainSteps.ql: bounded (≤4 hops) non-recursive call-path rendering
-  (readObject -> helper -> exec) so chains are visible, not just endpoints.
+- #1 GadgetChainPath.ql: real **`@kind path-problem`** gadget chain. Builds its own
+  PathGraph over the static call graph + framework-dispatch edges (depth-capped to
+  8 hops) so the full chain `readObject -> ... -> hashCode -> invoke -> exec` renders
+  as an explorable SARIF code-flow / VS Code path, not just the two endpoints.
+- #1 GadgetChainSteps.ql: bounded (≤4 hops) non-recursive call-path *string* rendering
+  (readObject -> helper -> exec) for the plain-text Markdown CLI reports.
 - #4 Framework-dispatch edges in GadgetModel (HashMap/TreeMap readObject ->
   hashCode/compare, proxy -> InvocationHandler.invoke) via dispatchEdge+, widening
   gadget reachability beyond the static call graph.

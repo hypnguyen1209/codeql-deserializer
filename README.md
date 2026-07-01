@@ -4,8 +4,8 @@
 
 [![CI](https://github.com/hypnguyen1209/codeql-deserializer/actions/workflows/check-queries.yml/badge.svg)](https://github.com/hypnguyen1209/codeql-deserializer/actions/workflows/check-queries.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-![Queries](https://img.shields.io/badge/queries-14-blue)
-![Tests](https://img.shields.io/badge/tests-13%2F13-brightgreen)
+![Queries](https://img.shields.io/badge/queries-16-blue)
+![Tests](https://img.shields.io/badge/tests-15%2F15-brightgreen)
 
 ## What this is
 
@@ -15,7 +15,7 @@ daily driver for deserialization research. Given Java or Python source (or a com
 `.jar`), it tells you **where untrusted data is deserialized** and **which gadget chains
 could weaponise it** — without you writing any CodeQL.
 
-- **15 queries** (13 Java + 2 Python), **13/13 tests pass**, CI-verified on Ubuntu.
+- **16 queries** (14 Java + 2 Python), **15/15 tests pass**, CI-verified on Ubuntu.
 - Reuses GitHub's official `codeql/java-all` + `codeql/python-all` models (no hand-rolled
   sink logic that drifts); adds framework-specific chains (Dubbo, RMI, Spring) and a
   ysoserial-style gadget model.
@@ -141,7 +141,8 @@ Jabsorb, `ObjectMessage.getObject()`. Recognized-safe variants are excluded:
 |---|---|---|
 | `java/deserialization/gadget-entry` | problem | `Serializable` `readObject`/`readResolve`/`readExternal`/`readObjectNoData` (chain start) |
 | `java/deserialization/gadget-action` | problem | RCE primitives: `Runtime.exec`, `Method.invoke`, `Class.forName`, `ClassLoader.loadClass`, `ScriptEngine.eval`, JNDI `lookup`, `Templates.newTransformer`, `URL.openConnection`, … |
-| java/deserialization/gadget-chain | problem | entry → action via the call graph |
+| java/deserialization/gadget-chain | problem | entry → action via the call graph (endpoints only) |
+| java/deserialization/gadget-chain-path | **path** | entry to action as an explorable path (`readObject -> ... -> hashCode -> invoke -> exec`) in SARIF/VS Code, over the call graph + dispatch edges (depth-capped) |
 | java/deserialization/gadget-chain-steps | problem | same, but renders the intermediate call path  -> b -> ... -> exec (≤4 hops) |
 | `java/deserialization/gadget-dispatch` | problem | serializable "link" method (`InvocationHandler.invoke`, `Comparator.compare`, `Map.get/put`, `equals/hashCode/toString`) → action |
 | `java/deserialization/novel-gadget` | problem | entry/dispatch → action, **not** in the ysoserial catalog → candidate new gadget |
@@ -177,7 +178,7 @@ codeql test run tests/java tests/python            # 13/13 unit tests
 bash examples/run-debug.sh                          # build real DBs, parity vs official query
 ```
 
-- **13 unit tests** (11 Java + 2 Python): vulnerable fixtures flagged, safe variants not.
+- **15 unit tests** (13 Java + 2 Python): vulnerable fixtures flagged, safe variants not.
 - **Deep-debug** ([`docs/deep-debug.md`](./docs/deep-debug.md)): Java 8 sinks across 8
   frameworks + 6 safe variants excluded; **parity** with GitHub's official
   `java/unsafe-deserialization` (same 8 results); Python 10 sinks + safe YAML excluded;
