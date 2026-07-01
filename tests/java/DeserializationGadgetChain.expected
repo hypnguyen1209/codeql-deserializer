@@ -1,2 +1,3 @@
 | gadgettest/EvilGadget.java:12:18:12:27 | readObject | Gadget chain: EvilGadget.readObject() reaches exec(), a deserialization RCE gadget. |
+| gadgettest/EvilMapHolder.java:18:18:18:27 | readObject | Gadget chain: EvilMapHolder.readObject() reaches invoke(), a deserialization RCE gadget. |
 | gadgettest/EvilMultiHop.java:12:18:12:27 | readObject | Gadget chain: EvilMultiHop.readObject() reaches exec(), a deserialization RCE gadget. |

@@ -7,9 +7,19 @@
   as an explorable SARIF code-flow / VS Code path, not just the two endpoints.
 - #1 GadgetChainSteps.ql: bounded (≤4 hops) non-recursive call-path *string* rendering
   (readObject -> helper -> exec) for the plain-text Markdown CLI reports.
-- #4 Framework-dispatch edges in GadgetModel (HashMap/TreeMap readObject ->
-  hashCode/compare, proxy -> InvocationHandler.invoke) via dispatchEdge+, widening
-  gadget reachability beyond the static call graph.
+- #4 Framework-dispatch edges reworked in GadgetModel (the call-graph analog of
+  `isAdditionalFlowStep`), now two conservative patterns that also render inside the
+  gadget-chain-path graph:
+  - (a) same-verb virtual dispatch (proxy `InvocationHandler.invoke`,
+    `Comparator.compare`, `Map.get/entrySet`), and
+  - (b) **contained-value container dispatch** — an outer gadget that embeds a field
+    of an inner gadget's type reaches the inner's container-triggered callback
+    (`HashMap.readObject -> key.hashCode()`, `TreeMap.readObject -> key.compareTo()`),
+    which the same-name heuristic structurally missed.
+  - FP fix: pattern (a) no longer treats an RCE action call (e.g. `Method.invoke`,
+    the sink) as a dispatch edge, which had wired unrelated gadgets together.
+  - New fixtures EvilMapHolder + EvilHashKey exercise `readObject -> (dispatch) ->
+    hashCode -> Method.invoke`.
 - #5 Expanded action catalog: JMX MBeanServer.invoke, Groovy GroovyShell/GroovyClassLoader,
   JShell, OGNL, MVEL, Spring SpEL, Velocity, Freemarker; + expanded known-gadget catalog.
 - #3 Tooling quick wins:

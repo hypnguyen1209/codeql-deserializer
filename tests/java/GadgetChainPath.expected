@@ -1,7 +1,10 @@
 edges
 | gadgettest/EvilGadget.java:12:18:12:27 | readObject | gadgettest/EvilGadget.java:14:9:14:38 | exec(...) |
+| gadgettest/EvilHashKey.java:15:16:15:23 | hashCode | gadgettest/EvilHashKey.java:17:13:17:33 | invoke(...) |
+| gadgettest/EvilMapHolder.java:18:18:18:27 | readObject | gadgettest/EvilHashKey.java:15:16:15:23 | hashCode |
 | gadgettest/EvilMultiHop.java:12:18:12:27 | readObject | gadgettest/EvilMultiHop.java:17:18:17:23 | helper |
 | gadgettest/EvilMultiHop.java:17:18:17:23 | helper | gadgettest/EvilMultiHop.java:18:9:18:38 | exec(...) |
 #select
 | gadgettest/EvilGadget.java:14:9:14:38 | exec(...) | gadgettest/EvilGadget.java:12:18:12:27 | readObject | gadgettest/EvilGadget.java:14:9:14:38 | exec(...) | Gadget chain: EvilGadget.readObject() reaches RCE exec() [critical]. |
+| gadgettest/EvilHashKey.java:17:13:17:33 | invoke(...) | gadgettest/EvilMapHolder.java:18:18:18:27 | readObject | gadgettest/EvilHashKey.java:17:13:17:33 | invoke(...) | Gadget chain: EvilMapHolder.readObject() reaches RCE invoke() [high]. |
 | gadgettest/EvilMultiHop.java:18:9:18:38 | exec(...) | gadgettest/EvilMultiHop.java:12:18:12:27 | readObject | gadgettest/EvilMultiHop.java:18:9:18:38 | exec(...) | Gadget chain: EvilMultiHop.readObject() reaches RCE exec() [critical]. |

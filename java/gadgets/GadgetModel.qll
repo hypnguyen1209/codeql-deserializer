@@ -135,16 +135,63 @@ class GadgetLinkMethod extends Method {
 }
 
 /**
- * Framework-dispatch edge (#4): `from` calls a method whose name matches a known
- * gadget-link dispatch verb (hashCode/equals/compare/get/put/entrySet/invoke) on
- * some receiver, and `to` is a serializable gadget link with that name. This models
- * HashMap/TreeMap readObject -> key.hashCode()/compare(), proxy -> InvocationHandler.invoke,
- * etc., where static call resolution can't bind the receiver. Over-approximate by design.
+ * Verbs the JDK container / `java.lang.reflect.Proxy` machinery invokes on a
+ * *deserialized* value without any source-visible call site: `HashMap.readObject`
+ * calls `key.hashCode()`/`equals()`, `TreeMap.readObject` calls
+ * `key.compareTo()`/`comparator.compare()`, a proxy call routes to
+ * `InvocationHandler.invoke()`, `AnnotationInvocationHandler` walks
+ * `memberValues.entrySet()`, etc. These are the container-triggered callbacks.
+ */
+predicate isContainerTriggeredVerb(string name) {
+  name = ["hashCode", "equals", "compareTo", "compare"]
+}
+
+/** All framework-dispatch verbs (container-triggered + proxy/map routing). */
+predicate isDispatchVerb(string name) {
+  isContainerTriggeredVerb(name) or
+  name = ["invoke", "get", "put", "entrySet", "containsKey", "toString", "readResolve"]
+}
+
+/**
+ * Framework-dispatch edge (#4) — the call-graph analog of an
+ * `isAdditionalFlowStep`: it links `src` to a serializable gadget-link method
+ * `dst` that the JDK/container/proxy would invoke during deserialization but that
+ * the *static* call graph cannot see. Two complementary, conservative patterns:
+ *
+ *  (a) SAME-VERB virtual dispatch — `src` contains a call to a dispatch verb
+ *      (`invoke`/`compare`/`get`/`entrySet`/...) whose receiver the extractor
+ *      could not bind to a concrete impl, and `dst` is a serializable override of
+ *      that verb. Models proxy `InvocationHandler.invoke`, `Comparator.compare`,
+ *      `Map.get`, and `AnnotationInvocationHandler.invoke -> memberValues.entrySet()`.
+ *
+ *  (b) CONTAINED-VALUE container dispatch — `src` is a deserialization callback or
+ *      link on a serializable type that *embeds a field* of the serializable type
+ *      declaring `dst`, and `dst` is a container-triggered callback
+ *      (`hashCode`/`equals`/`compareTo`/`compare`). Models
+ *      `HashMap.readObject -> key.hashCode()` / `TreeMap.readObject -> key.compareTo()`
+ *      where the outer gadget embeds the inner gadget whose callback the container
+ *      fires. This is what the same-name heuristic (a) structurally misses (the
+ *      caller invokes `put`, not `hashCode`). Scoped to a direct field of the
+ *      inner gadget's declared type, so it does not fire on unrelated types.
  */
 predicate dispatchEdge(Method src, GadgetLinkMethod dst) {
+  // (a) same-verb virtual dispatch the call graph may not resolve. Exclude calls
+  //     that are themselves RCE actions (e.g. `java.lang.reflect.Method.invoke`):
+  //     those are the *sink*, not a dispatch to a serializable `invoke()` override,
+  //     and treating them as dispatch edges wires unrelated gadgets together (FP).
+  isDispatchVerb(dst.getName()) and
   exists(MethodCall mc |
     mc.getCaller() = src and
-    mc.getMethod().hasName(dst.getName())
+    mc.getMethod().hasName(dst.getName()) and
+    not mc instanceof GadgetActionCall
+  )
+  or
+  // (b) contained-value container dispatch: outer gadget embeds the inner gadget
+  isContainerTriggeredVerb(dst.getName()) and
+  (src instanceof GadgetEntryPoint or src instanceof GadgetLinkMethod) and
+  exists(Field f |
+    f.getDeclaringType() = src.getDeclaringType() and
+    f.getType().(RefType).getSourceDeclaration() = dst.getDeclaringType().getSourceDeclaration()
   )
 }
 

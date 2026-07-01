@@ -1,4 +1,6 @@
 | gadgettest/EvilComparator.java:12:16:12:22 | compare | Novel gadget candidate: EvilComparator.compare() reaches exec() [critical] and is not in the known ysoserial catalog \u2014 investigate as a new gadget. |
 | gadgettest/EvilGadget.java:12:18:12:27 | readObject | Novel gadget candidate: EvilGadget.readObject() reaches exec() [critical] and is not in the known ysoserial catalog \u2014 investigate as a new gadget. |
 | gadgettest/EvilHandler.java:13:19:13:24 | invoke | Novel gadget candidate: EvilHandler.invoke() reaches invoke() [high] and is not in the known ysoserial catalog \u2014 investigate as a new gadget. |
+| gadgettest/EvilHashKey.java:15:16:15:23 | hashCode | Novel gadget candidate: EvilHashKey.hashCode() reaches invoke() [high] and is not in the known ysoserial catalog \u2014 investigate as a new gadget. |
+| gadgettest/EvilMapHolder.java:18:18:18:27 | readObject | Novel gadget candidate: EvilMapHolder.readObject() reaches invoke() [high] and is not in the known ysoserial catalog \u2014 investigate as a new gadget. |
 | gadgettest/EvilMultiHop.java:12:18:12:27 | readObject | Novel gadget candidate: EvilMultiHop.readObject() reaches exec() [critical] and is not in the known ysoserial catalog \u2014 investigate as a new gadget. |
