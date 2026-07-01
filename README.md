@@ -84,7 +84,7 @@ python tools/hunt.py path/to/java-src --command "mvn -B compile -q"
 ```
 
 **B — Compiled JAR + entry class** (`tools/find-gadget-deser.py`):
-decompiles the jar (CFR) → buildless DB → reports chains **from your start class**
+decompiles the jar (CFR by default; `--decompiler procyon|jadx` for jars CFR chokes on) → buildless DB → reports chains **from your start class**
 to any dangerous sink (deserialize **or** RCE action), via the call graph:
 
 ```bash
@@ -131,16 +131,18 @@ See [`docs/hunting-guide.md`](./docs/hunting-guide.md) for the full daily workfl
 | `java/deserialization/dubbo-chain` | path | Dubbo `Codec2.decodeBody` → `ObjectInput.readXXX` (CVE-2020-11995 style) |
 
 Covered sinks: `ObjectInputStream.readObject/readUnshared`, `XMLDecoder`, XStream,
-Kryo, SnakeYAML, Jackson polymorphic, Hessian/Burlap, Jodd, Gson, Fastjson, JsonIo,
-Jabsorb, `ObjectMessage.getObject()`. Recognized-safe variants are excluded:
-`ValidatingObjectInputStream`, `SerialKiller`, XStream/Kryo whitelist, SnakeYAML
-`SafeConstructor`, Jackson type validator.
+Kryo (incl. `readClassAndObject` + pool variants), SnakeYAML, Jackson polymorphic,
+Hessian/Burlap + `Hessian2Input`, Jodd, Gson, Fastjson, JsonIo, Jabsorb,
+`ObjectMessage.getObject()`, and the RMI/JMX-remote `MarshalledObject.get()` /
+`javax.management.remote.rmi.RMIConnection` primitives. Recognized-safe variants are
+excluded: `ValidatingObjectInputStream`, `SerialKiller`, XStream/Kryo whitelist,
+SnakeYAML `SafeConstructor`, Jackson type validator.
 
 ### Java — ysoserial-style gadgets (modelled on `frohoff/ysoserial`)
 | `@id` | Kind | Finds |
 |---|---|---|
 | `java/deserialization/gadget-entry` | problem | `Serializable` `readObject`/`readResolve`/`readExternal`/`readObjectNoData` (chain start) |
-| `java/deserialization/gadget-action` | problem | RCE primitives: `Runtime.exec`, `Method.invoke`, `Class.forName`, `ClassLoader.loadClass`, `ScriptEngine.eval`, JNDI `lookup`, `Templates.newTransformer`, `URL.openConnection`, … |
+| `java/deserialization/gadget-action` | problem | RCE primitives: `Runtime.exec`, `Method.invoke`, `Class.forName`, `ClassLoader.loadClass`, `ScriptEngine.eval`, JNDI `lookup`, `Templates.newTransformer`, `URL.openConnection`, JMX `MBeanServer.invoke`, Groovy/JShell/OGNL/MVEL/SpEL/Velocity/Freemarker eval, javassist `ProxyFactory`, … |
 | java/deserialization/gadget-chain | problem | entry → action via the call graph (endpoints only) |
 | java/deserialization/gadget-chain-path | **path** | entry to action as an explorable path (`readObject -> ... -> hashCode -> invoke -> exec`) in SARIF/VS Code, over the call graph + dispatch edges (depth-capped) |
 | java/deserialization/gadget-chain-steps | problem | same, but renders the intermediate call path  -> b -> ... -> exec (≤4 hops) |

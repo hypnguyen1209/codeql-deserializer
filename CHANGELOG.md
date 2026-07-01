@@ -20,8 +20,19 @@
     the sink) as a dispatch edge, which had wired unrelated gadgets together.
   - New fixtures EvilMapHolder + EvilHashKey exercise `readObject -> (dispatch) ->
     hashCode -> Method.invoke`.
-- #5 Expanded action catalog: JMX MBeanServer.invoke, Groovy GroovyShell/GroovyClassLoader,
-  JShell, OGNL, MVEL, Spring SpEL, Velocity, Freemarker; + expanded known-gadget catalog.
+- #5 Catalog + decompiler expansion:
+  - Actions: JMX `MBeanServer.invoke`, Groovy `GroovyShell`/`GroovyClassLoader`, JShell,
+    OGNL, MVEL, Spring SpEL, Velocity, Freemarker, and javassist `ProxyFactory` /
+    `Proxy.newProxyInstance`.
+  - Sinks (`ExtraDeserializationSinkCall`): `Hessian2Input`/`HessianInput`, Kryo
+    `readClassAndObject`/`readObject` (incl. pool variants), and the RMI/JMX-remote
+    `MarshalledObject.get()` + `javax.management.remote.rmi.RMIConnection` primitives;
+    surfaced by the `sink` query and treated as dangerous by find-gadget-deser.
+  - Known-gadget catalog: +ROME, Click, Vaadin, BeanShell, Jython, Clojure, Hibernate,
+    MySQL/DBCP JDBC, `JdbcRowSetImpl`, `BadAttributeValueExpException`, etc.
+  - Decompiler choice in find-gadget-deser.py: `--decompiler cfr|procyon|jadx`
+    (procyon jar auto-downloaded; jadx from PATH) for jars CFR can't parse.
+  - New test fixtures + stubs (extrasinktest/ExtraSinks) cover the Hessian/Kryo sinks.
 - #3 Tooling quick wins:
   - `--threads` now defaults to **0 (one per core)** and is passed to *both*
     `database create` and `database analyze` in hunt.py and find-gadget-deser.py

@@ -10,6 +10,7 @@
 import java
 import semmle.code.java.security.UnsafeDeserializationQuery
 import gadgets.GadgetModel
+import deserialization.DeserializationSinkModel
 
 /**
  * A dangerous call: either an unsafe deserialization sink
@@ -22,12 +23,16 @@ class DangerousCall extends MethodCall {
   DangerousCall() {
     exists(UnsafeDeserializationSink s | this = s.getMethodCall())
     or
+    this instanceof ExtraDeserializationSinkCall
+    or
     this instanceof GadgetActionCall
   }
 
   /** Human-readable kind, e.g. "deserialization", "RCE:exec", "RCE:lookup". */
   string getDangerKind() {
-    if exists(UnsafeDeserializationSink s | this = s.getMethodCall())
+    if
+      exists(UnsafeDeserializationSink s | this = s.getMethodCall()) or
+      this instanceof ExtraDeserializationSinkCall
     then result = "deserialization"
     else result = "RCE:" + this.(GadgetActionCall).getActionName()
   }

@@ -1,2 +1,4 @@
 | A.java:11:12:11:26 | readObject(...) | Deserialization sink: readObject() deserializes data that may be attacker-controlled. |
 | A.java:18:12:18:26 | readObject(...) | Deserialization sink: readObject() deserializes data that may be attacker-controlled. |
+| extrasinktest/ExtraSinks.java:13:16:13:30 | readObject(...) | Deserialization sink: readObject() deserializes data that may be attacker-controlled. |
+| extrasinktest/ExtraSinks.java:17:16:17:42 | readClassAndObject(...) | Deserialization sink: readClassAndObject() deserializes data that may be attacker-controlled. |

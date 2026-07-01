@@ -17,11 +17,13 @@ Usage:
   python3 tools/find-gadget-deser.py --jar app.jar --start-class MainWebSpring
   python3 tools/find-gadget-deser.py --jar app.jar --start-class com.example.MainWebSpring --full
   python3 tools/find-gadget-deser.py --jar app.jar --start-class Main --threads 4 --sarif out.sarif --keep-decompiled
+  python3 tools/find-gadget-deser.py --jar app.jar --start-class Main --decompiler procyon   # or jadx
 
 Requires:
   - CodeQL CLI on PATH; local packs installed: codeql pack install java/qlpack.yml
-  - a Java runtime on PATH (to run the CFR decompiler) - or set JAVA_HOME
-  - internet on first run to fetch the CFR decompiler into tools/.cache (or pass --cfr)
+  - a Java runtime on PATH (to run the CFR/Procyon decompiler) - or set JAVA_HOME
+  - internet on first run to fetch the CFR/Procyon decompiler into tools/.cache
+    (or pass --decompiler-jar); for --decompiler jadx, jadx must be on PATH
 """
 import argparse
 import hashlib
@@ -34,7 +36,11 @@ import tempfile
 import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CFR_URL = "https://repo1.maven.org/maven2/org/benf/cfr/0.152/cfr-0.152.jar"
+# Downloadable decompiler jars (jadx is a separate CLI expected on PATH).
+DECOMPILER_URLS = {
+    "cfr": "https://repo1.maven.org/maven2/org/benf/cfr/0.152/cfr-0.152.jar",
+    "procyon": "https://github.com/mstrobel/procyon/releases/download/v0.6.0/procyon-decompiler-0.6.0.jar",
+}
 TEMPLATE = os.path.join(REPO, "java", "_generated", "_ReachableFromStartTemplate.ql")
 SEARCH = os.path.join(REPO, "java")
 SEV_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "deserialization": 0, "info": 4}
@@ -48,30 +54,47 @@ def find_java():
     return which("java")
 
 
-def get_cfr(override):
+def get_decompiler_jar(name, override):
+    """Path to the CFR/Procyon jar (downloaded+cached under tools/.cache)."""
     if override:
         return override
     cache = os.path.join(REPO, "tools", ".cache")
     os.makedirs(cache, exist_ok=True)
-    cfr = os.path.join(cache, "cfr.jar")
-    if not os.path.exists(cfr):
-        print(f"[find-gadget-deser] downloading CFR decompiler -> {cfr}", file=sys.stderr)
-        urllib.request.urlretrieve(CFR_URL, cfr)
-    return cfr
+    jarpath = os.path.join(cache, name + ".jar")
+    if not os.path.exists(jarpath):
+        print(f"[find-gadget-deser] downloading {name} decompiler -> {jarpath}", file=sys.stderr)
+        urllib.request.urlretrieve(DECOMPILER_URLS[name], jarpath)
+    return jarpath
 
 
-def decompile(java, cfr, jar, outdir):
+def decompile(java, decompiler, decompiler_jar, jar, outdir):
+    """Decompile `jar` into `outdir` with the chosen decompiler; return the actual
+    source root (a subdir for jadx) or None on failure."""
     if os.path.isdir(outdir):
         shutil.rmtree(outdir)
-    r = subprocess.run([java, "-jar", cfr, jar, "--outputdir", outdir],
-                       capture_output=True, text=True)
+    if decompiler == "cfr":
+        cmd = [java, "-jar", decompiler_jar, jar, "--outputdir", outdir]
+    elif decompiler == "procyon":
+        cmd = [java, "-jar", decompiler_jar, "-o", outdir, jar]
+    elif decompiler == "jadx":
+        jadx = shutil.which("jadx") or "jadx"
+        cmd = [jadx, "--no-res", "-d", outdir, jar]
+    else:
+        print(f"[find-gadget-deser] ERROR: unknown decompiler {decompiler!r}.", file=sys.stderr)
+        return None
+    r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         print(r.stdout); print(r.stderr, file=sys.stderr)
-        print("[find-gadget-deser] ERROR: CFR decompilation failed.", file=sys.stderr)
-        return False
-    n = sum(len(files) for _, _, files in os.walk(outdir) if any(f.endswith(".java") for f in files))
-    print(f"[find-gadget-deser] decompiled {n} .java files into {outdir}", file=sys.stderr)
-    return True
+        print(f"[find-gadget-deser] ERROR: {decompiler} decompilation failed"
+              + (" (is jadx on PATH?)" if decompiler == "jadx" else "") + ".", file=sys.stderr)
+        return None
+    # jadx writes decompiled .java under <outdir>/sources
+    srcroot = outdir
+    if decompiler == "jadx" and os.path.isdir(os.path.join(outdir, "sources")):
+        srcroot = os.path.join(outdir, "sources")
+    n = sum(len(files) for _, _, files in os.walk(srcroot) if any(f.endswith(".java") for f in files))
+    print(f"[find-gadget-deser] {decompiler} decompiled {n} .java files into {srcroot}", file=sys.stderr)
+    return srcroot
 
 
 def build_db(codeql, src, db, threads=None):
@@ -178,7 +201,12 @@ def main():
     ap.add_argument("--jar", required=True, help="path to the .jar to analyse")
     ap.add_argument("--start-class", required=True, help="entry class, e.g. MainWebSpring or com.example.MainWebSpring")
     ap.add_argument("--full", action="store_true", help="also run the full gadget/sink suite (global)")
-    ap.add_argument("--cfr", default=None, help="path to cfr.jar (default: auto-download to tools/.cache)")
+    ap.add_argument("--decompiler", choices=["cfr", "procyon", "jadx"], default="cfr",
+                    help="decompiler: cfr (default) / procyon (auto-downloaded jar) / jadx (must be on PATH). "
+                         "Try procyon or jadx when CFR emits code CodeQL cannot parse on large/obfuscated jars.")
+    ap.add_argument("--decompiler-jar", default=None,
+                    help="override path to the cfr/procyon jar (default: auto-download to tools/.cache)")
+    ap.add_argument("--cfr", default=None, help="[deprecated alias for --decompiler-jar when --decompiler=cfr]")
     ap.add_argument("--codeql", default="codeql", help="path to codeql CLI")
     ap.add_argument("--out", default=None, help="report markdown path")
     ap.add_argument("--threads", type=int, default=0,
@@ -197,16 +225,21 @@ def main():
     db_cached = os.path.isdir(db) and os.path.exists(os.path.join(db, "codeql-database.yml"))
     work = tempfile.mkdtemp(prefix="find-gadget-deser-")
     src = os.path.join(work, "src")
-    print(f"[find-gadget-deser] jar={args.jar} start-class={args.start_class} (db cache: {db})", file=sys.stderr)
-    # Decompilation (CFR) only feeds the DB build; skip it entirely when the DB is
-    # already cached for this jar sha256 (unless --keep-decompiled asks for source).
+    srcroot = src
+    print(f"[find-gadget-deser] jar={args.jar} start-class={args.start_class} decompiler={args.decompiler} (db cache: {db})", file=sys.stderr)
+    # Decompilation only feeds the DB build; skip it entirely when the DB is already
+    # cached for this jar sha256 (unless --keep-decompiled asks for the source).
     if db_cached and not args.keep_decompiled:
         print(f"[find-gadget-deser] DB cached for jar sha256={jar_hash}; skipping decompile+build", file=sys.stderr)
     else:
-        cfr = get_cfr(args.cfr)
-        if not decompile(java, cfr, args.jar, src):
+        decompiler_jar = None
+        if args.decompiler in ("cfr", "procyon"):
+            override = args.decompiler_jar or (args.cfr if args.decompiler == "cfr" else None)
+            decompiler_jar = get_decompiler_jar(args.decompiler, override)
+        srcroot = decompile(java, args.decompiler, decompiler_jar, args.jar, src)
+        if srcroot is None:
             sys.exit(1)
-    if not build_db(args.codeql, src, db, args.threads):
+    if not build_db(args.codeql, srcroot, db, args.threads):
         sys.exit(1)
 
     gendir = os.path.join(REPO, "java", "_generated")

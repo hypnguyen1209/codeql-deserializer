@@ -75,6 +75,13 @@ class GadgetActionCall extends MethodCall {
       m.getDeclaringType().getASupertype*().hasQualifiedName("org.apache.velocity.app", "Velocity") and m.hasName("evaluate")
       or
       m.getDeclaringType().getASupertype*().hasQualifiedName("freemarker.template", "Template") and m.hasName("process")
+      or
+      // javassist ProxyFactory (defines/loads a class -> code-exec primitive)
+      m.getDeclaringType().getASupertype*().hasQualifiedName("javassist.util.proxy", "ProxyFactory") and
+        m.hasName(["create", "createClass"])
+      or
+      // java.lang.reflect.Proxy dynamic proxy (routes calls to an InvocationHandler)
+      m.getDeclaringType().hasQualifiedName("java.lang.reflect", "Proxy") and m.hasName("newProxyInstance")
     )
   }
 
@@ -259,5 +266,26 @@ predicate isKnownYsoserialGadgetClass(RefType t) {
     or t.hasQualifiedName("org.apache.commons.configuration", "ConfigurationMap")
     or t.hasQualifiedName("org.apache.wicket.util.link", "Link")
     or t.hasQualifiedName("org.codehaus.groovy.runtime", "ConvertedClosure")
+    // --- additional ysoserial / ysoserial-ext / GadgetProbe catalog entries ---
+    or t.hasQualifiedName("com.sun.rowset", "JdbcRowSetImpl")                       // JNDI (CVE-2017-?)
+    or t.hasQualifiedName("javax.management", "BadAttributeValueExpException")      // toString trigger
+    or t.hasQualifiedName("com.rometools.rome.feed.impl", ["ObjectBean", "ToStringBean", "EqualsBean"])
+    or t.hasQualifiedName("com.sun.syndication.feed.impl", ["ObjectBean", "ToStringBean"])
+    or t.hasQualifiedName("org.apache.click.control", "Column")                     // Click1/Click2
+    or t.hasQualifiedName("com.vaadin.data.util", ["NestedMethodProperty", "PropertysetItem"])
+    or t.hasQualifiedName("bsh", ["XThis", "This"])                                 // BeanShell
+    or t.hasQualifiedName("org.python.core", ["PyObject", "PyFunction"])            // Jython
+    or t.hasQualifiedName("clojure.lang", ["PersistentArrayMap", "AFunction"])      // Clojure
+    or t.hasQualifiedName("org.hibernate.engine.spi", ["TypedValue"])
+    or t.hasQualifiedName("org.hibernate.tuple.component", "AbstractComponentTuplizer")
+    or t.hasQualifiedName("com.mysql.cj.jdbc.admin", "MiniAdmin")                   // MySQL JDBC
+    or t.hasQualifiedName("org.apache.tomcat.dbcp.dbcp2", "BasicDataSource")
+    or t.hasQualifiedName("org.apache.commons.dbcp2", "BasicDataSource")
+    or t.hasQualifiedName("org.apache.commons.collections.functors", ["WhileClosure", "ForClosure", "InstantiateFactory"])
+    or t.hasQualifiedName("org.apache.xalan.xsltc.trax", "TemplatesImpl")           // non-internal Xalan
+    or t.hasQualifiedName("org.jboss.weld.interceptor.builder", "InterceptionModelBuilder")
+    or t.hasQualifiedName("org.apache.aries.transaction.jms.internal", "XaPooledConnectionFactory")
+    or t.hasQualifiedName("com.caucho.config.types", "ResourceRef")                 // Resin
+    or t.hasQualifiedName("javax.imageio", "ImageIO")                               // GadgetProbe-style probe classes
   )
 }

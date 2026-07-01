@@ -17,8 +17,16 @@
 import java
 import deserialization.DeserializationSinkModel
 
-from JavaDeserializationSink sink
-select
-  sink.getCall(),
-  "Deserialization sink: " + sink.getCall().getMethod().getName() +
+/** Every deserialization sink call: the official `codeql/java-all` set plus the
+ *  extra framework sinks (Hessian/Kryo/MarshalledObject) modelled in #5. */
+MethodCall deserializationSinkCall() {
+  exists(JavaDeserializationSink s | result = s.getCall())
+  or
+  result instanceof ExtraDeserializationSinkCall
+}
+
+from MethodCall call
+where call = deserializationSinkCall()
+select call,
+  "Deserialization sink: " + call.getMethod().getName() +
     "() deserializes data that may be attacker-controlled."
