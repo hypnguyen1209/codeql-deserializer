@@ -102,7 +102,7 @@ python tools/hunt.py path/to/py-src --lang python --mode full --out report.md
 
 ### PoC skeleton + benchmark
 
-- `tools/gen-poc.py --sarif <find-gadget-deser.sarif> --index N -o PoC.java` — emits a minimal Java serialize->deserialize harness skeleton for a chosen chain hit (TODO markers for arming the payload; validation is yours).
+- `tools/gen-poc.py --sarif <find-gadget-deser.sarif>` lists the chain hits; add `--index N --yes-i-have-authorization -o PoC.java` to emit a minimal Java serialize->deserialize harness skeleton for that hit. It is **optional**, prints an authorization warning, and refuses to write without the ack flag; the skeleton is **non-armed** (`buildGadget()` throws — you construct the real gadget graph and validate yourself).
 - `benchmark/bench.py` — recall/precision benchmark on known chains (commons-collections-style, commons-beanutils `BeanComparator`, + a safe control). Run: `python3 benchmark/bench.py` (needs `javac` on PATH).
 
 Both hunting tools print a ranked Markdown report (grouped by rule, sorted `[critical]` >

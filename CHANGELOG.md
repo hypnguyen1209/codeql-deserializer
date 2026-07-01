@@ -48,7 +48,10 @@
   control, with bench.py measuring recall/precision. Currently recall 100%, precision 100%
   (bench caught a real fixture bug: LazyMap must implement Map to be a recognized dispatch link).
 - #7 tools/gen-poc.py: from a find-gadget-deser SARIF hit, emit a minimal Java
-  serialize->deserialize PoC skeleton (TODO markers; validation is yours).
+  serialize->deserialize PoC skeleton (TODO markers; validation is yours). Now prints
+  an authorization warning on every run and REFUSES to write the harness without an
+  explicit `--yes-i-have-authorization` ack; the skeleton stays non-armed
+  (`buildGadget()` throws) by design.
 - 14 unit tests pass; README updated (15 queries, new tools).
 
 

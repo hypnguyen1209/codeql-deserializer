@@ -90,12 +90,27 @@ public class PoC {{
 '''
 
 
+WARNING = (
+    "==================================================================\n"
+    " gen-poc.py — OPTIONAL PoC skeleton generator\n"
+    " Emits a NON-armed serialize->deserialize harness (buildGadget() throws;\n"
+    " you must construct the real gadget graph yourself). Use ONLY against\n"
+    " systems you own or are explicitly authorized to assess. Generating or\n"
+    " running exploit code against other systems may be illegal.\n"
+    "=================================================================="
+)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Generate a Java PoC skeleton from a find-gadget-deser SARIF result.")
     ap.add_argument("--sarif", required=True, help="SARIF from find-gadget-deser.py --sarif")
     ap.add_argument("--index", type=int, default=None, help="result index (0-based). If omitted, list and exit.")
     ap.add_argument("-o", "--out", default="PoC.java", help="output .java path")
+    ap.add_argument("--yes-i-have-authorization", dest="ack", action="store_true",
+                    help="required to WRITE the harness: confirms you are authorized to test the target")
     args = ap.parse_args()
+
+    print(WARNING, file=sys.stderr)
 
     d = json.load(open(args.sarif, "r", encoding="utf-8"))
     results = (d.get("runs") or [{}])[0].get("results", [])
@@ -110,8 +125,14 @@ def main():
     if args.index is None:
         for i, p in enumerate(parsed):
             print(f"[{i}] {p['class']}.{p['method']}() -> {p['kind']} @ {p['file']}:{p['line']}")
-        print("\nre-run with --index N to generate PoC.java for result N", file=sys.stderr)
+        print("\nre-run with --index N --yes-i-have-authorization to generate PoC.java for result N",
+              file=sys.stderr)
         sys.exit(0)
+    if not args.ack:
+        print("\n[gen-poc] REFUSING to write a harness without --yes-i-have-authorization.\n"
+              "          Re-run with that flag to confirm you are authorized to test the target.",
+              file=sys.stderr)
+        sys.exit(2)
     info = parsed[args.index]
     code = skeleton(info)
     open(args.out, "w", encoding="utf-8").write(code)
